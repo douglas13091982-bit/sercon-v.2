@@ -79,7 +79,7 @@ export function Acessos() {
       const r = await supabase.rpc("criar_convite", {
         _email: email,
         _papel: papel,
-        _morador_id: papel === "morador" ? moradorId : undefined,
+        ...(papel === "morador" && moradorId ? { _morador_id: moradorId } : {}),
       });
       if (r.error) throw r.error;
       return r.data;

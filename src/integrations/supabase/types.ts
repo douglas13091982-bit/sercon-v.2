@@ -266,10 +266,17 @@ export type Database = {
       unidades: {
         Row: {
           andar: number | null
+          aluguel_mensal: number | null
+          agua_medidor: string | null
           bloco_id: string
           condominio_id: string
+          contrato_fim: string | null
+          contrato_inicio: string | null
+          contrato_nome: string | null
+          contrato_storage_path: string | null
           created_at: string
           fracao_ideal: number | null
+          gas_medidor: string | null
           id: string
           metragem: number | null
           numero: string
@@ -277,10 +284,17 @@ export type Database = {
         }
         Insert: {
           andar?: number | null
+          aluguel_mensal?: number | null
+          agua_medidor?: string | null
           bloco_id: string
           condominio_id: string
+          contrato_fim?: string | null
+          contrato_inicio?: string | null
+          contrato_nome?: string | null
+          contrato_storage_path?: string | null
           created_at?: string
           fracao_ideal?: number | null
+          gas_medidor?: string | null
           id?: string
           metragem?: number | null
           numero: string
@@ -288,10 +302,17 @@ export type Database = {
         }
         Update: {
           andar?: number | null
+          aluguel_mensal?: number | null
+          agua_medidor?: string | null
           bloco_id?: string
           condominio_id?: string
+          contrato_fim?: string | null
+          contrato_inicio?: string | null
+          contrato_nome?: string | null
+          contrato_storage_path?: string | null
           created_at?: string
           fracao_ideal?: number | null
+          gas_medidor?: string | null
           id?: string
           metragem?: number | null
           numero?: string

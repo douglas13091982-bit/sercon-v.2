@@ -15,6 +15,13 @@
       "when": 1792699547141,
       "tag": "0001_grants_data_api",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792699592520,
+      "tag": "0002_acessos_auditoria",
+      "breakpoints": true
     }
   ]
 }

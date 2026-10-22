@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          acao: string
+          condominio_id: string | null
+          criado_em: string
+          id: string
+          registro_id: string
+          tabela: string
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          condominio_id?: string | null
+          criado_em?: string
+          id?: string
+          registro_id: string
+          tabela: string
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          condominio_id?: string | null
+          criado_em?: string
+          id?: string
+          registro_id?: string
+          tabela?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blocos: {
         Row: {
           condominio_id: string
@@ -72,6 +110,63 @@ export type Database = {
           telefone?: string | null
         }
         Relationships: []
+      }
+      convites_acesso: {
+        Row: {
+          aceito_em: string | null
+          condominio_id: string
+          criado_em: string
+          criado_por: string | null
+          email: string
+          expira_em: string
+          id: string
+          morador_id: string | null
+          papel: Database["public"]["Enums"]["app_role"]
+          revogado_em: string | null
+          token_hash: string
+        }
+        Insert: {
+          aceito_em?: string | null
+          condominio_id: string
+          criado_em?: string
+          criado_por?: string | null
+          email: string
+          expira_em?: string
+          id?: string
+          morador_id?: string | null
+          papel: Database["public"]["Enums"]["app_role"]
+          revogado_em?: string | null
+          token_hash: string
+        }
+        Update: {
+          aceito_em?: string | null
+          condominio_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          email?: string
+          expira_em?: string
+          id?: string
+          morador_id?: string | null
+          papel?: Database["public"]["Enums"]["app_role"]
+          revogado_em?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "convites_acesso_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "convites_acesso_morador_id_condominio_id_fkey"
+            columns: ["morador_id", "condominio_id"]
+            isOneToOne: false
+            referencedRelation: "moradores"
+            referencedColumns: ["id", "condominio_id"]
+          },
+        ]
       }
       moradores: {
         Row: {
@@ -242,6 +337,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      aceitar_convite: { Args: { _token: string }; Returns: undefined }
+      criar_convite: {
+        Args: {
+          _email: string
+          _morador_id?: string
+          _papel: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: string
+      }
       current_condominio_id: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -250,6 +354,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      listar_acessos: {
+        Args: never
+        Returns: {
+          email: string
+          nome: string
+          papel: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
+      revogar_acesso: { Args: { _user_id: string }; Returns: undefined }
+      revogar_convite: { Args: { _id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "super_admin" | "sindico" | "porteiro" | "morador"

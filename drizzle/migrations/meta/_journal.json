@@ -8,6 +8,13 @@
       "when": 1792699535332,
       "tag": "0000_fundacao_multicondominio",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792699547141,
+      "tag": "0001_grants_data_api",
+      "breakpoints": true
     }
   ]
 }

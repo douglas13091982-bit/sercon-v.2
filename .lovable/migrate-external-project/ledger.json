@@ -1,0 +1,9 @@
+[
+  {"capability":"code","source":"code archive (Lovable TanStack app)","outcome":"migrate","status":"done","next_action":null},
+  {"capability":"schema","source":"supabase/migrations (2 files)","outcome":"migrate","status":"done","next_action":null},
+  {"capability":"records","source":"no export attached","outcome":"migrate","status":"pending","next_action":"User to export table data as CSV/JSON"},
+  {"capability":"auth identities","source":"no user export","outcome":"migrate","status":"pending","next_action":"User to export users list"},
+  {"capability":"authorization","source":"RLS + user_roles","outcome":"migrate","status":"done","next_action":null},
+  {"capability":"storage/providers/webhooks/schedules","source":"none detected","outcome":"n/a","status":"verified","next_action":null},
+  {"capability":"verification","source":"tests + preview","outcome":"verify","status":"in_progress","next_action":null}
+]

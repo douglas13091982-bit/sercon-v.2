@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, MapPin, Phone, Mail, Edit2, Trash2, Pencil } from "lucide-react";
+import { Building2, Plus, MapPin, Phone, Mail, Edit2, Trash2, Pencil, Users, FileText, Upload, ExternalLink } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { DataTable } from "../components/DataTable";
 import { Badge } from "../components/Badge";
 import { Modal } from "../components/Modal";
 import { useAuth } from "../contexts/AuthContext";
@@ -116,10 +116,24 @@ export function Condominio() {
     },
   });
 
+  const moradoresQuery = useQuery({
+    queryKey: ["moradores", condominioId],
+    enabled: !!condominioId && !isSuperAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("moradores")
+        .select("id,nome,tipo,unidade_id,email")
+        .eq("condominio_id", condominioId)
+        .order("nome");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const condominio = condominioQuery.data ?? null;
   const blocos = blocosQuery.data ?? [];
   const unidades = unidadesQuery.data ?? [];
-  const nomeBloco = new Map(blocos.map((b) => [b.id, b.nome]));
+  const moradores = moradoresQuery.data ?? [];
 
   // ───────── Dados do condomínio ─────────
   const [editandoDados, setEditandoDados] = useState(false);
@@ -192,6 +206,12 @@ export function Condominio() {
 
   const excluirBloco = useMutation({
     mutationFn: async (id: string) => {
+      const { data: contratos } = await supabase
+        .from("unidades")
+        .select("contrato_storage_path")
+        .eq("condominio_id", condominioId)
+        .eq("bloco_id", id)
+        .not("contrato_storage_path", "is", null);
       const { error } = await supabase
         .from("blocos")
         .delete()
@@ -200,6 +220,8 @@ export function Condominio() {
         .select("id")
         .single();
       if (error) throw error;
+      const paths = (contratos ?? []).flatMap((row) => row.contrato_storage_path ? [row.contrato_storage_path] : []);
+      if (paths.length) await supabase.storage.from("contratos-locacao").remove(paths);
     },
     onSuccess: invalidar,
     onError: (e: { code?: string }) =>
@@ -220,6 +242,16 @@ export function Condominio() {
       excluirBloco.mutate(b.id);
   };
 
+  const abrirContrato = async (u: UnidadeRow) => {
+    if (!u.contrato_storage_path) return;
+    const { data, error } = await supabase.storage.from("contratos-locacao").createSignedUrl(u.contrato_storage_path, 60);
+    if (error || !data?.signedUrl) {
+      window.alert("Não foi possível abrir o contrato.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
   // ───────── Unidades ─────────
   const formUnidadeVazio = {
     blocoId: "",
@@ -227,12 +259,18 @@ export function Condominio() {
     andar: "",
     metragem: "",
     fracao: "",
+    aluguel: "",
+    contratoInicio: "",
+    contratoFim: "",
     status: "vago" as StatusUnidade,
   };
   const [unidadeModal, setUnidadeModal] = useState(false);
   const [unidadeEditId, setUnidadeEditId] = useState<string | null>(null);
   const [formUnidade, setFormUnidade] = useState(formUnidadeVazio);
   const [erroUnidade, setErroUnidade] = useState("");
+  const [arquivoContrato, setArquivoContrato] = useState<File | null>(null);
+  const [contratoPathAtual, setContratoPathAtual] = useState("");
+  const [contratoNomeAtual, setContratoNomeAtual] = useState("");
 
   const abrirUnidade = (u?: UnidadeRow) => {
     setUnidadeEditId(u?.id ?? null);
@@ -244,10 +282,16 @@ export function Condominio() {
             andar: u.andar?.toString() ?? "",
             metragem: u.metragem?.toString() ?? "",
             fracao: u.fracao_ideal?.toString() ?? "",
+            aluguel: u.aluguel_mensal?.toString() ?? "",
+            contratoInicio: u.contrato_inicio ?? "",
+            contratoFim: u.contrato_fim ?? "",
             status: (u.status as StatusUnidade) ?? "vago",
           }
         : { ...formUnidadeVazio, blocoId: blocos[0]?.id ?? "" },
     );
+    setArquivoContrato(null);
+    setContratoPathAtual(u?.contrato_storage_path ?? "");
+    setContratoNomeAtual(u?.contrato_nome ?? "");
     setErroUnidade("");
     setUnidadeModal(true);
   };
@@ -255,15 +299,23 @@ export function Condominio() {
   const salvarUnidade = useMutation({
     mutationFn: async () => {
       const f = formUnidade;
+      const aluguel = numeroOuNull(f.aluguel);
+      if (f.aluguel.trim() && (aluguel === null || aluguel < 0))
+        throw new Error("Informe um valor de aluguel válido.");
+      if (f.contratoInicio && f.contratoFim && f.contratoFim < f.contratoInicio)
+        throw new Error("A data final do contrato deve ser posterior à data inicial.");
       const dadosUnidade = {
         bloco_id: f.blocoId,
         numero: f.numero.trim(),
         andar: numeroOuNull(f.andar),
         metragem: numeroOuNull(f.metragem),
         fracao_ideal: numeroOuNull(f.fracao),
+        aluguel_mensal: aluguel,
+        contrato_inicio: f.contratoInicio || null,
+        contrato_fim: f.contratoFim || null,
         status: f.status,
       };
-      const { error } = unidadeEditId
+      const saved = unidadeEditId
         ? await supabase
             .from("unidades")
             .update(dadosUnidade)
@@ -271,23 +323,41 @@ export function Condominio() {
             .eq("id", unidadeEditId)
             .select("id")
             .single()
-        : await supabase.from("unidades").insert({ ...dadosUnidade, condominio_id: condominioId });
-      if (error) throw error;
+        : await supabase.from("unidades").insert({ ...dadosUnidade, condominio_id: condominioId }).select("id").single();
+      if (saved.error) throw saved.error;
+      if (arquivoContrato) {
+        const path = `${condominioId}/${saved.data.id}/${Date.now()}-${arquivoContrato.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const { error: uploadError } = await supabase.storage.from("contratos-locacao").upload(path, arquivoContrato, { contentType: arquivoContrato.type, upsert: false });
+        if (uploadError) throw uploadError;
+        const { error: metadataError } = await supabase.from("unidades").update({ contrato_storage_path: path, contrato_nome: arquivoContrato.name }).eq("condominio_id", condominioId).eq("id", saved.data.id);
+        if (metadataError) {
+          await supabase.storage.from("contratos-locacao").remove([path]);
+          throw metadataError;
+        }
+        if (contratoPathAtual) await supabase.storage.from("contratos-locacao").remove([contratoPathAtual]);
+      }
     },
     onSuccess: () => {
       invalidar();
       setUnidadeModal(false);
     },
-    onError: (e: { code?: string }) =>
+    onError: (e: { code?: string; message?: string }) =>
       setErroUnidade(
-        e.code === "23505"
-          ? "Já existe uma unidade com esse número neste bloco."
-          : mensagemErro(e, "Não foi possível salvar a unidade."),
+        e.message ??
+          (e.code === "23505"
+            ? "Já existe uma unidade com esse número neste bloco."
+            : mensagemErro(e, "Não foi possível salvar a unidade.")),
       ),
   });
 
   const excluirUnidade = useMutation({
     mutationFn: async (id: string) => {
+      const { data: unidade } = await supabase
+        .from("unidades")
+        .select("contrato_storage_path")
+        .eq("condominio_id", condominioId)
+        .eq("id", id)
+        .maybeSingle();
       const { error } = await supabase
         .from("unidades")
         .delete()
@@ -296,6 +366,8 @@ export function Condominio() {
         .select("id")
         .single();
       if (error) throw error;
+      if (unidade?.contrato_storage_path)
+        await supabase.storage.from("contratos-locacao").remove([unidade.contrato_storage_path]);
     },
     onSuccess: invalidar,
     onError: (e: { code?: string }) =>
@@ -382,70 +454,13 @@ export function Condominio() {
   }
 
   // ───────── Síndico / demais papéis ─────────
-  const unidadeColumns = [
-    {
-      key: "numero",
-      header: "Unidade",
-      render: (u: UnidadeRow) => <span className="font-medium">{u.numero}</span>,
-    },
-    {
-      key: "bloco_id",
-      header: "Bloco",
-      render: (u: UnidadeRow) => nomeBloco.get(u.bloco_id) ?? "-",
-    },
-    { key: "andar", header: "Andar", render: (u: UnidadeRow) => (u.andar ?? "-").toString() },
-    {
-      key: "metragem",
-      header: "m²",
-      render: (u: UnidadeRow) => (u.metragem != null ? `${u.metragem} m²` : "-"),
-    },
-    {
-      key: "fracao_ideal",
-      header: "Fração Ideal",
-      render: (u: UnidadeRow) => (u.fracao_ideal != null ? `${u.fracao_ideal}%` : "-"),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (u: UnidadeRow) => {
-        const s = infoStatus(u.status);
-        return <Badge variant={s.variant}>{s.label}</Badge>;
-      },
-    },
-    ...(podeEditar
-      ? [
-          {
-            key: "acoes",
-            header: "",
-            sortable: false,
-            render: (u: UnidadeRow) => (
-              <div className="flex gap-1 justify-end">
-                <button
-                  onClick={() => abrirUnidade(u)}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="Editar unidade"
-                >
-                  <Pencil className="w-4 h-4 text-gray-400" />
-                </button>
-                <button
-                  onClick={() =>
-                    window.confirm(
-                      `Excluir a unidade ${nomeBloco.get(u.bloco_id) ?? ""} - ${u.numero}?`,
-                    ) && excluirUnidade.mutate(u.id)
-                  }
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="Excluir unidade"
-                >
-                  <Trash2 className="w-4 h-4 text-red-400" />
-                </button>
-              </div>
-            ),
-          },
-        ]
-      : []),
-  ];
-
   const novoLabel = tab === "blocos" ? "Novo Bloco" : tab === "unidades" ? "Nova Unidade" : "";
+  const passosSetup = [
+    { titulo: "Condomínio", pronto: !!condominio, abrir: () => setTab("info" as const) },
+    { titulo: "Blocos", pronto: blocos.length > 0, abrir: () => setTab("blocos" as const) },
+    { titulo: "Apartamentos", pronto: unidades.length > 0, abrir: () => setTab("unidades" as const) },
+    { titulo: "Moradores", pronto: moradores.length > 0, abrir: () => {} },
+  ];
 
   return (
     <div className="space-y-6">
@@ -482,7 +497,12 @@ export function Condominio() {
         ))}
       </div>
 
-      {(condominioQuery.isError || blocosQuery.isError || unidadesQuery.isError) && (
+      {podeEditar && <section className="rounded-xl border border-teal-100 bg-teal-50/70 p-4 dark:border-teal-900 dark:bg-teal-950/30">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-gray-900 dark:text-white">Primeiros passos</h2><p className="text-sm text-gray-600 dark:text-gray-300">Cadastre o condomínio, organize os apartamentos e vincule os moradores.</p></div><span className="text-xs font-medium text-teal-800 dark:text-teal-200">{passosSetup.filter((s) => s.pronto).length} de 4 concluídos</span></div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{passosSetup.map((step, index) => <div key={step.titulo} className={`flex items-center gap-3 rounded-lg border bg-white px-3 py-2 dark:bg-gray-800 ${step.pronto ? "border-teal-200 dark:border-teal-800" : "border-gray-200 dark:border-gray-700"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.pronto ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300"}`}>{step.pronto ? "✓" : index + 1}</span>{step.titulo === "Moradores" ? <Link to="/$page" params={{ page: "moradores" }} className="flex-1 text-sm font-medium text-gray-800 hover:text-teal-700 dark:text-gray-200 dark:hover:text-teal-300">Cadastrar moradores</Link> : <button onClick={step.abrir} className="flex-1 text-left text-sm font-medium text-gray-800 hover:text-teal-700 dark:text-gray-200 dark:hover:text-teal-300">{step.titulo}{step.titulo === "Apartamentos" ? " e contratos" : ""}</button>}</div>)}</div>
+      </section>}
+
+      {(condominioQuery.isError || blocosQuery.isError || unidadesQuery.isError || moradoresQuery.isError) && (
         <p className="text-sm text-red-500">
           Não foi possível carregar os dados. Recarregue a página.
         </p>
@@ -606,17 +626,50 @@ export function Condominio() {
       )}
 
       {tab === "unidades" && (
-        <DataTable
-          data={unidades}
-          columns={unidadeColumns}
-          searchKeys={["numero", "status"]}
-          pageSize={10}
-          emptyMessage={
-            podeEditar
-              ? 'Nenhuma unidade cadastrada. Crie um bloco e depois clique em "Nova Unidade".'
-              : "Nenhuma unidade cadastrada"
-          }
-        />
+        <div>
+          {blocos.length === 0 && (
+            <p className="rounded-xl bg-white p-5 text-sm text-gray-500 dark:bg-gray-800">
+              Cadastre um bloco para começar a organizar os apartamentos.
+            </p>
+          )}
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {blocos.map((bloco) => {
+              const doBloco = unidades.filter((u) => u.bloco_id === bloco.id);
+              return (
+                <section key={bloco.id} className="w-[290px] min-w-[290px] rounded-xl bg-gray-100 p-3 dark:bg-gray-800/70">
+                  <header className="mb-3 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{bloco.nome}</h3>
+                    <Badge variant="neutral">{doBloco.length} apto(s)</Badge>
+                  </header>
+                  <div className="space-y-3">
+                    {doBloco.map((u) => {
+                      const residentes = moradores.filter((m) => m.unidade_id === u.id);
+                      const status = infoStatus(u.status);
+                      return (
+                        <article key={u.id} className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                          <div className="flex items-start justify-between gap-2">
+                            <div><p className="text-lg font-bold text-gray-900 dark:text-white">Apartamento {u.numero}</p><p className="text-xs text-gray-500 dark:text-gray-400">{u.andar != null ? `${u.andar}º andar · ` : ""}{u.metragem != null ? `${u.metragem} m²` : "Unidade"}</p></div>
+                            <Badge variant={status.variant}>{status.label}</Badge>
+                          </div>
+                          {u.aluguel_mensal != null && <div className="mt-3 rounded-md bg-teal-50 px-3 py-2 dark:bg-teal-900/20"><p className="text-xs text-teal-700 dark:text-teal-300">Aluguel mensal</p><p className="font-semibold text-teal-800 dark:text-teal-200">{Number(u.aluguel_mensal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>}
+                          {(u.contrato_inicio || u.contrato_fim) && <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Contrato: {u.contrato_inicio ? new Date(`${u.contrato_inicio}T00:00:00`).toLocaleDateString("pt-BR") : "—"} até {u.contrato_fim ? new Date(`${u.contrato_fim}T00:00:00`).toLocaleDateString("pt-BR") : "—"}</p>}
+                          <div className="mt-3"><p className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500"><Users className="h-3.5 w-3.5" /> Moradores ({residentes.length})</p>{residentes.length ? <ul className="space-y-1">{residentes.map((m) => <li key={m.id} className="flex items-center justify-between gap-2 text-sm text-gray-700 dark:text-gray-300"><span className="truncate">{m.nome}</span><span className="text-xs text-gray-400">{m.tipo === "inquilino" ? "Inquilino" : m.tipo === "proprietario" ? "Proprietário" : "Dependente"}</span></li>)}</ul> : <p className="text-sm text-gray-400">Nenhum morador cadastrado</p>}</div>
+                          {podeEditar && u.contrato_storage_path && <button onClick={() => void abrirContrato(u)} className="mt-3 flex w-full items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-left text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"><FileText className="h-4 w-4 text-teal-600" /><span className="flex-1 truncate">{u.contrato_nome || "Contrato de aluguel"}</span><ExternalLink className="h-3.5 w-3.5" /></button>}
+                          <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
+                            {podeEditar && <button onClick={() => abrirUnidade(u)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-900/30"><Pencil className="h-3.5 w-3.5" /> Editar</button>}
+                            {podeEditar && <button onClick={() => window.confirm(`Excluir o apartamento ${u.numero}? Esta ação não pode ser desfeita.`) && excluirUnidade.mutate(u.id)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"><Trash2 className="h-3.5 w-3.5" /> Excluir</button>}
+                            <Link to="/$page" params={{ page: "moradores" }} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"><Users className="h-3.5 w-3.5" /> Gerenciar moradores</Link>
+                          </div>
+                        </article>
+                      );
+                    })}
+                    {doBloco.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-xs text-gray-500 dark:border-gray-600">Nenhum apartamento neste bloco.</p>}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Dados do condomínio */}
@@ -776,6 +829,10 @@ export function Condominio() {
               />
             </div>
             <div>
+              <label className={labelClass}>Aluguel mensal (R$)</label>
+              <input type="number" min="0" step="0.01" className={inputClass} value={formUnidade.aluguel} onChange={(e) => setFormUnidade({ ...formUnidade, aluguel: e.target.value })} placeholder="Opcional" />
+            </div>
+            <div>
               <label className={labelClass}>Status</label>
               <select
                 className={inputClass}
@@ -788,6 +845,20 @@ export function Condominio() {
                 <option value="ocupado">Ocupado</option>
                 <option value="venda">À venda</option>
               </select>
+            </div>
+            <div>
+              <label className={labelClass}>Início do contrato</label>
+              <input type="date" className={inputClass} value={formUnidade.contratoInicio} onChange={(e) => setFormUnidade({ ...formUnidade, contratoInicio: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Fim do contrato</label>
+              <input type="date" className={inputClass} value={formUnidade.contratoFim} onChange={(e) => setFormUnidade({ ...formUnidade, contratoFim: e.target.value })} />
+            </div>
+            <div className="col-span-2">
+              <label className={labelClass}>Contrato de aluguel (PDF, JPG ou PNG · até 10 MB)</label>
+              {contratoNomeAtual && !arquivoContrato && <p className="mb-2 flex items-center gap-2 text-xs text-gray-500"><FileText className="h-4 w-4" />Arquivo salvo: {contratoNomeAtual}</p>}
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"><Upload className="h-4 w-4" />{arquivoContrato ? arquivoContrato.name : contratoNomeAtual ? "Substituir arquivo" : "Selecionar arquivo"}<input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 10 * 1024 * 1024) { setErroUnidade("O contrato deve ter no máximo 10 MB."); e.target.value = ""; return; } setErroUnidade(""); setArquivoContrato(f); }} /></label>
+              <p className="mt-1 text-xs text-gray-500">O arquivo fica privado e pode ser acessado pelo síndico do condomínio.</p>
             </div>
           </div>
           {erroUnidade && <p className="text-sm text-red-500">{erroUnidade}</p>}

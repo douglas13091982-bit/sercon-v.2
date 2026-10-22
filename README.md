@@ -16,9 +16,9 @@ Sistema de gestão condominial com React, TanStack Start e Supabase, conectado a
 ## Primeiro uso
 
 1. Na tela de entrada, escolha **Criar condomínio**. Confirme o e-mail quando solicitado.
-2. Em **Condomínio**, cadastre blocos e unidades.
-3. Em **Moradores**, cadastre a pessoa, sua unidade e o e-mail.
-4. Em **Usuários e acessos**, gere o link correspondente e compartilhe com a pessoa.
+2. Em **Condomínio**, siga os primeiros passos para cadastrar blocos e apartamentos.
+3. No cartão do apartamento, consulte moradores, aluguel mensal e contrato privado de locação; use **Gerenciar moradores** para adicionar os residentes à unidade.
+4. Em **Usuários e acessos**, gere o link para liberar a conta do morador.
 5. O destinatário abre o link, entra ou cria a conta com o e-mail autorizado, confirma o e-mail e aceita o convite.
 6. Para remover o acesso, use **Revogar**. Para excluir um morador com login ativo, revogue o acesso primeiro.
 

@@ -16,7 +16,12 @@ create table public.configuracoes_financeiras (
 alter table public.unidades
   add column aluguel_mensal numeric(12,2) check (aluguel_mensal is null or aluguel_mensal >= 0),
   add column gas_medidor text,
-  add column agua_medidor text;
+  add column agua_medidor text,
+  add column contrato_storage_path text,
+  add column contrato_nome text,
+  add column contrato_inicio date,
+  add column contrato_fim date,
+  add constraint unidades_contrato_periodo_check check (contrato_fim is null or contrato_inicio is null or contrato_fim >= contrato_inicio);
 
 create table public.leituras_consumo (
   id uuid primary key default gen_random_uuid(),
@@ -84,6 +89,25 @@ grant select, insert, update, delete on public.configuracoes_financeiras, public
 grant all on public.configuracoes_financeiras, public.leituras_consumo, public.cobrancas_unidade to service_role;
 grant select, insert, update on public.unidades to authenticated;
 grant update (aluguel_mensal, gas_medidor, agua_medidor) on public.unidades to authenticated;
+grant update (contrato_storage_path, contrato_nome, contrato_inicio, contrato_fim) on public.unidades to authenticated;
+
+-- Contratos privados: síndicos só acessam arquivos do próprio condomínio.
+insert into storage.buckets(id, name, public, file_size_limit, allowed_mime_types)
+values ('contratos-locacao', 'contratos-locacao', false, 10485760,
+  array['application/pdf','image/jpeg','image/png'])
+on conflict (id) do update set public = false, file_size_limit = 10485760,
+  allowed_mime_types = array['application/pdf','image/jpeg','image/png'];
+create policy contratos_locacao_sindico_select on storage.objects for select to authenticated
+  using (bucket_id = 'contratos-locacao' and
+    (public.has_role(auth.uid(), 'super_admin') or
+      (split_part(name, '/', 1) = public.current_condominio_id()::text and public.has_role(auth.uid(), 'sindico'))));
+create policy contratos_locacao_sindico_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'contratos-locacao' and split_part(name, '/', 1) = public.current_condominio_id()::text and public.has_role(auth.uid(), 'sindico'));
+create policy contratos_locacao_sindico_update on storage.objects for update to authenticated
+  using (bucket_id = 'contratos-locacao' and split_part(name, '/', 1) = public.current_condominio_id()::text and public.has_role(auth.uid(), 'sindico'))
+  with check (bucket_id = 'contratos-locacao' and split_part(name, '/', 1) = public.current_condominio_id()::text and public.has_role(auth.uid(), 'sindico'));
+create policy contratos_locacao_sindico_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'contratos-locacao' and split_part(name, '/', 1) = public.current_condominio_id()::text and public.has_role(auth.uid(), 'sindico'));
 
 create trigger auditar_configuracoes_financeiras after insert or update or delete on public.configuracoes_financeiras for each row execute function public.registrar_auditoria();
 create trigger auditar_leituras_consumo after insert or update or delete on public.leituras_consumo for each row execute function public.registrar_auditoria();

@@ -16,9 +16,9 @@ Sistema de gestão condominial com React, TanStack Start e Supabase, conectado a
 ## Primeiro uso
 
 1. Na tela de entrada, escolha **Criar condomínio**. Confirme o e-mail quando solicitado.
-2. Em **Condomínio**, cadastre blocos e unidades.
-3. Em **Moradores**, cadastre a pessoa, sua unidade e o e-mail.
-4. Em **Usuários e acessos**, gere o link correspondente e compartilhe com a pessoa.
+2. Em **Condomínio**, siga os primeiros passos para cadastrar blocos e apartamentos.
+3. No cartão do apartamento, consulte moradores, aluguel mensal e contrato privado de locação; use **Gerenciar moradores** para adicionar os residentes à unidade.
+4. Em **Usuários e acessos**, gere o link para liberar a conta do morador.
 5. O destinatário abre o link, entra ou cria a conta com o e-mail autorizado, confirma o e-mail e aceita o convite.
 6. Para remover o acesso, use **Revogar**. Para excluir um morador com login ativo, revogue o acesso primeiro.
 
@@ -37,7 +37,7 @@ A primeira conta Super Admin deve ser atribuída por um operador autorizado no b
 
 ## Próximos módulos
 
-Portaria, Comunicados, Financeiro, Reservas, Assembleias, Manutenção e Configurações ainda contêm exemplos e estão sinalizados como **demonstração**. Seus formulários não têm persistência definitiva nesta etapa.
+Comunicados, Reservas, Assembleias, Manutenção e Configurações ainda contêm exemplos e estão sinalizados como **demonstração**. Seus formulários não têm persistência definitiva nesta etapa. O Financeiro agora possui configuração persistente das taxas padrão, leituras de consumo e cobranças por apartamento; não há integração bancária nem emissão/baixa automática externa.
 
 Ainda não estão implementados Asaas, cobrança e baixa automática, chamados, votação por fração ideal, regras de reservas, QR de visitantes, envio de e-mail/WhatsApp ou relatórios PDF/Excel. O histórico entregue cobre cadastros e acessos; as opções demonstrativas de LGPD não representam controles implementados ou conformidade concluída.
 
@@ -53,7 +53,7 @@ npm run build
 
 O ambiente conectado ao Lovable já fornece a configuração pública do Supabase. Para outro ambiente, configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local`. Nunca use uma chave administrativa no navegador.
 
-Migrações, em ordem, estão em `supabase/migrations`. A migração de acessos e auditoria desta etapa foi aplicada ao banco conectado em 22/10/2026. Não reexecute arquivos já aplicados. Em um banco novo, aplique ambas as migrações.
+Migrações, em ordem, estão em `drizzle/migrations`. A migração de acessos e auditoria da fundação foi aplicada ao banco conectado em 22/10/2026. A nova migração `0003_financeiro_unidades.sql` precisa ser aplicada uma vez no banco Supabase conectado antes de usar o Financeiro atualizado; ela não é executada automaticamente por um commit. Em um banco novo, aplique as migrações em ordem.
 
 ### Verificação de isolamento no banco
 

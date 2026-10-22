@@ -14,16 +14,245 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      blocos: {
+        Row: {
+          condominio_id: string
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          condominio_id: string
+          created_at?: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          condominio_id?: string
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocos_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      condominios: {
+        Row: {
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          endereco: string | null
+          id: string
+          nome: string
+          telefone: string | null
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          nome: string
+          telefone?: string | null
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          nome?: string
+          telefone?: string | null
+        }
+        Relationships: []
+      }
+      moradores: {
+        Row: {
+          condominio_id: string
+          contrato: Json | null
+          cpf: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string
+          pets: Json
+          telefone: string | null
+          tipo: string
+          unidade_id: string | null
+          user_id: string | null
+          veiculos: Json
+        }
+        Insert: {
+          condominio_id: string
+          contrato?: Json | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome: string
+          pets?: Json
+          telefone?: string | null
+          tipo?: string
+          unidade_id?: string | null
+          user_id?: string | null
+          veiculos?: Json
+        }
+        Update: {
+          condominio_id?: string
+          contrato?: Json | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string
+          pets?: Json
+          telefone?: string | null
+          tipo?: string
+          unidade_id?: string | null
+          user_id?: string | null
+          veiculos?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moradores_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moradores_unidade_id_condominio_id_fkey"
+            columns: ["unidade_id", "condominio_id"]
+            isOneToOne: false
+            referencedRelation: "unidades"
+            referencedColumns: ["id", "condominio_id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          condominio_id: string | null
+          created_at: string
+          email: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          condominio_id?: string | null
+          created_at?: string
+          email?: string
+          id: string
+          nome?: string
+        }
+        Update: {
+          condominio_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unidades: {
+        Row: {
+          andar: number | null
+          bloco_id: string
+          condominio_id: string
+          created_at: string
+          fracao_ideal: number | null
+          id: string
+          metragem: number | null
+          numero: string
+          status: string
+        }
+        Insert: {
+          andar?: number | null
+          bloco_id: string
+          condominio_id: string
+          created_at?: string
+          fracao_ideal?: number | null
+          id?: string
+          metragem?: number | null
+          numero: string
+          status?: string
+        }
+        Update: {
+          andar?: number | null
+          bloco_id?: string
+          condominio_id?: string
+          created_at?: string
+          fracao_ideal?: number | null
+          id?: string
+          metragem?: number | null
+          numero?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unidades_bloco_id_condominio_id_fkey"
+            columns: ["bloco_id", "condominio_id"]
+            isOneToOne: false
+            referencedRelation: "blocos"
+            referencedColumns: ["id", "condominio_id"]
+          },
+          {
+            foreignKeyName: "unidades_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_condominio_id: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "sindico" | "porteiro" | "morador"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +379,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "sindico", "porteiro", "morador"],
+    },
   },
 } as const

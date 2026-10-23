@@ -8,7 +8,7 @@ var supabase=(supabaseUrl&&supabaseKey)?createClient(supabaseUrl,supabaseKey):nu
 var brl=function(v){return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var uid=function(){return crypto.randomUUID()};
-var padd=function(n){return String(n).padStart(2,'0')};
+function padd(n){return String(n).padStart(2,'0')}
 function ymLocal(){var d=new Date();return d.getFullYear()+'-'+padd(d.getMonth()+1)}
 function todayLocal(){var d=new Date();return d.getFullYear()+'-'+padd(d.getMonth()+1)+'-'+padd(d.getDate())}
 function safeName(n){return String(n||'arquivo').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9._-]+/g,'_').slice(-120)}

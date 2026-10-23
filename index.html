@@ -10,10 +10,7 @@
   --font-body:'Schibsted Grotesk','Segoe UI',system-ui,sans-serif;
   --font-data:'IBM Plex Mono',ui-monospace,Menlo,monospace;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0e171c; --surface:#16232a; --surface-2:#1d2d36; --line:#2a3d48;
-  --fg:#e5edf0; --muted:#93a5af; --accent:#3cc4bb; --accent-fg:#06211f; --accent-soft:#16413f;
-  --ok:#5fd68a; --ok-soft:#173a26; --warn:#f2b45a; --warn-soft:#3d2e12; --bad:#ff8a7d; --bad-soft:#44201c; color-scheme:dark}}
+
 :root[data-theme="dark"]{
   --bg:#0e171c; --surface:#16232a; --surface-2:#1d2d36; --line:#2a3d48;
   --fg:#e5edf0; --muted:#93a5af; --accent:#3cc4bb; --accent-fg:#06211f; --accent-soft:#16413f;
@@ -30,6 +27,14 @@ aside{position:sticky;top:16px;align-self:start;display:flex;flex-direction:colu
 .brand h1{font-size:19px}
 .brand small{display:block;color:var(--muted);font-size:12px}
 .roles{display:flex;flex-direction:column;gap:4px}
+.session-box{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0}
+.session-box>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.session-box label,.theme-picker span{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.session-box strong{font-size:13px;line-height:1.25;overflow-wrap:anywhere}
+.session-box .btn{width:auto;flex:0 0 auto;padding:5px 9px}
+.theme-picker{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.theme-picker select{width:auto;min-width:106px;padding:7px 10px}
+@media(max-width:600px){.head{align-items:flex-start}.theme-picker{margin-left:auto}.theme-picker select{min-width:92px}}
 .roles label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 select,input,textarea{background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-width:0;width:100%}
 select:focus,input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}

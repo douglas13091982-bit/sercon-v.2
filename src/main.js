@@ -237,7 +237,8 @@ function vUnits(){
    '<label>Telefone<input id="u-tel" placeholder="(47) 90000-0000"></label>'+
    '<label>Situação<select id="u-sit"><option>Proprietário residente</option><option>Inquilino</option><option>Vago</option></select></label>'+
    '<label>Aluguel (R$)<input id="u-alu" type="number" min="0" step="0.01" value="0"></label>'+
-   '<label>Medidor de gás<input id="u-gas" placeholder="Ex.: G-101"></label><label>Medidor de água<input id="u-agua" placeholder="Ex.: A-101"></label>'+\n   '<label class="wide">Vagas de estacionamento vinculadas<input id="u-vagas" placeholder="Ex.: 12, V1, V2"><small>Informe a identificação de cada vaga, separada por vírgula.</small></label>'+
+   '<label>Medidor de gás<input id="u-gas" placeholder="Ex.: G-101"></label><label>Medidor de água<input id="u-agua" placeholder="Ex.: A-101"></label>'+
+   '<label class="wide">Vagas de estacionamento vinculadas<input id="u-vagas" placeholder="Ex.: 12, V1, V2"><small>Informe a identificação de cada vaga, separada por vírgula.</small></label>'+
    '<label>Início do contrato<input id="u-inicio" type="date"></label><label>Fim do contrato<input id="u-fim" type="date"></label>'+
    '<label class="wide">Contrato de aluguel (PDF, JPG ou PNG)<input id="u-contrato" type="file" accept="application/pdf,image/jpeg,image/png"></label>'+
    '<p class="note wide">Taxa mensal padrão do condomínio: <b>'+brl(S.config.taxaCondominio||0)+'</b>. Configure esse valor no cadastro do condomínio.</p>'+

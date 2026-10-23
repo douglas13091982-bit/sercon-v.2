@@ -84,8 +84,10 @@ function shell(){
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
 
 var authMode='register', authNotice='';
+function setShell(on){var app=document.getElementById('app');if(app)app.className=on?'shell':'auth'}
 function renderAuth(){
   var app=document.getElementById('app');
+  setShell(false);
   if(!supabase){app.innerHTML='<main class="panel"><h2>Conectar o Supabase</h2><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY no ambiente do projeto para habilitar cadastro e salvamento.</p></main>';return}
   var reg=authMode==='register';
   app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com o e-mail e a senha do síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
@@ -469,6 +471,7 @@ function render(){
   if(!supabase){renderAuth();return}
   if(!DB_READY){renderAuth();return}
   var a=document.activeElement, id=a&&a.id;
+  setShell(true);
   document.getElementById('app').innerHTML=shell();
   if(id==='mes'){var el=document.getElementById(id);if(el)el.focus()}
 }

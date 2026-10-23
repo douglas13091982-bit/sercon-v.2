@@ -86,7 +86,8 @@ form.f .wide{grid-column:1/-1}
 .mini{width:92px;padding:5px 7px}
 a.btn{display:inline-block;text-decoration:none}
 a.btn.wa{background:var(--ok-soft);color:var(--ok)}
-.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.subtabs{display:flex;gap:4px;min-width:0;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.subtabs::-webkit-scrollbar{display:none}
 .subtabs button{background:none;border:0;border-bottom:3px solid transparent;padding:9px 18px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-1px;white-space:nowrap}
 .subtabs button:hover{color:var(--fg)}
 .subtabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}

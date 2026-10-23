@@ -34,7 +34,7 @@ function save(){if(!DB_READY||role==='morador'||savePending)return;savePending=t
 
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas', unitTab='apartamentos', activeBlock='', activeUnitId='', editingTenant=false;
 var MY='A-302';
-var finQ='',finSt='todos',unitQ='',THEME='auto',RECOVERY=/type=recovery/.test(location.hash),authEmail='';
+var finQ='',finSt='todos',unitQ='',THEME='light',RECOVERY=/type=recovery/.test(location.hash),authEmail='';
 var NAV={
   sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['acessos','Acessos dos moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['equipe_portaria','Equipe da portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
@@ -93,9 +93,8 @@ function unitOptions(){return S.unidades.map(function(u){return '<option>'+esc(u
 function flash(m){var d=document.createElement('div');d.className='toast';d.setAttribute('role','status');d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},2600)}
 function toast(m){toastMsg=m;render();setTimeout(function(){toastMsg='';var t=document.querySelector('#app .toast');if(t)t.remove()},2200)}
 
-function applyTheme(){var r=document.documentElement;if(THEME==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',THEME)}
-function themeLabel(){return THEME==='dark'?'escuro':THEME==='light'?'claro':'automático'}
-try{THEME=localStorage.getItem('condogestor-theme')||'auto'}catch(x){}
+function applyTheme(){document.documentElement.setAttribute('data-theme',THEME==='dark'?'dark':'light')}
+try{var storedTheme=localStorage.getItem('condogestor-theme');if(storedTheme==='dark'||storedTheme==='light')THEME=storedTheme}catch(x){}
 function shell(){
   var items=NAV[role].filter(function(i){return role!=='sindico'||i[0]!=='portaria'||PORTARIA_CONFIG.habilitada});
   if(!items.some(function(i){return i[0]===view}))view=items[0][0];
@@ -117,11 +116,11 @@ function shell(){
   var residentHeader=resident?'<header class="resident-app-header"><div class="resident-app-brand"><div class="brand-mark">C</div><div><b>CondoGestor</b><small>'+esc(COND)+'</small></div></div><label class="resident-month"><span>Mês</span><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></label></header>':'';
   var body={dashboard:vDash,unidades:vUnits,acessos:vAccesses,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,equipe_portaria:vEquipePortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
-    '<div class="roles"><label>Sessão</label><button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button><button class="btn ghost sm" type="button" data-theme-toggle>Tema: '+themeLabel()+'</button></div>'+
+    '<div class="session-box"><div><label>Condomínio</label><strong>'+esc(COND||'Condomínio')+'</strong></div><button class="btn ghost sm" type="button" data-signout aria-label="Sair do sistema">Sair</button></div>'+
     (resident?'':'<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div>')+'<nav>'+navHtml+'</nav></aside><main class="'+(resident?'resident-main':'')+'">'+residentHeader+body+mobileNav+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
 }
 function todoCard(label,n,nav,tab){return '<button type="button" class="todo'+(n?' has':'')+'" data-nav="'+nav+'"'+(tab?' data-ftab-set="'+tab+'"':'')+'><b>'+n+'</b><span>'+label+'</span></button>'}
-function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
+function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div>'+(role==='morador'?'':'<label class="theme-picker"><span>Tema</span><select id="theme-select" aria-label="Selecionar tema"><option value="light"'+(THEME==='light'?' selected':'')+'>Claro</option><option value="dark"'+(THEME==='dark'?' selected':'')+'>Escuro</option></select></label>')+'</div>'}
 
 var authMode='login', authNotice='';
 function setShell(on){var app=document.getElementById('app');if(app)app.className=on?'shell':'auth'}
@@ -717,6 +716,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&activeUnitI
 document.addEventListener('input',function(e){var t=e.target;if(t.id==='q-fin'){finQ=t.value;render()}else if(t.id==='q-unit'){unitQ=t.value;render()}});
 document.addEventListener('change',function(e){
   if(e.target.id==='q-fin-st'){finSt=e.target.value;render()}
+  if(e.target.id==='theme-select'){THEME=e.target.value==='dark'?'dark':'light';try{localStorage.setItem('condogestor-theme',THEME)}catch(x){}applyTheme()}
   if(e.target.id==='mes'){setMes(e.target.value);render()}
   if(e.target.id==='my-unit'&&role!=='morador'){MY=e.target.value;render()}
   if(e.target.id==='c-alu-fin'){S.config.cobrarAluguel=e.target.value==='sim';save();render()}
@@ -762,7 +762,6 @@ document.addEventListener('click',async function(e){
   if(d.exportCob){exportCobrancas();return}
   if(d.exportDesp){exportDespesas();return}
   if(d.printReport){printReport();return}
-  if(d.themeToggle){THEME=THEME==='auto'?'dark':THEME==='dark'?'light':'auto';try{localStorage.setItem('condogestor-theme',THEME)}catch(x){}applyTheme();render();return}
   if(d.nav){if(d.ftabSet)financeTab=d.ftabSet;view=d.nav;render();return}
   if(d.pay){f=S.unidades.filter(function(u){return u.id===d.pay})[0];f.pago[MES]=true;save();await saveQueue;var paidResult=await Promise.all([supabase.from('cobrancas_unidade').update({status:'pago'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01'),supabase.from('cobrancas_taxas_adicionais').update({status:'pago'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01')]);var paidError=paidResult.find(function(x){return x.error});if(paidError){flash('Não foi possível confirmar a baixa: '+paidError.error.message);return}toast('Pagamento registrado para '+uLabel(f));return}
   if(d.unpay){f=S.unidades.filter(function(u){return u.id===d.unpay})[0];if(!window.confirm('Estornar o pagamento de '+uLabel(f)+'?'))return;delete f.pago[MES];save();await saveQueue;var unpayResult=await Promise.all([supabase.from('cobrancas_unidade').update({status:'pendente'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01'),supabase.from('cobrancas_taxas_adicionais').update({status:'pendente'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01')]);var unpayError=unpayResult.find(function(x){return x.error});if(unpayError){flash('Não foi possível estornar: '+unpayError.error.message);return}toast('Pagamento estornado');return}

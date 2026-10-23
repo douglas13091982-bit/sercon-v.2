@@ -17,13 +17,13 @@ function loadDemo(demoRole){
   DEMO=true;DB_READY=true;role=demoRole==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';COND='Residencial Jardim das Flores';CONDO_ID='demo';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};MY='A-101';setMes(MES);S=seed();
   S.config={tarifaGas:7.5,tarifaAgua:0,taxaCondominio:320,vencimentoDia:10,contaAgua:780,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}};S.config.contaMes[MES]=780;S.config.tarifaMes[MES]=7.5;
   var unit=function(id,bloco,apto,dono,morador,tel,situacao,aluguel,gas,agua,pago){var u={id:id,bloco:bloco,apto:apto,dono:dono,morador:morador,tel:tel,situacao:situacao,taxa:320,aluguel:aluguel,leituras:{},pago:{},gasMeter:'G-'+apto,waterMeter:'A-'+apto,parkingSpaces:[]};u.leituras[MES]={gas:[gas-5,gas],agua:[agua-4,agua]};if(pago)u.pago[MES]=true;return u};
-  S.unidades=[unit('demo-a101','A','101','Marcos Silva','João e Ana Lima','(47) 99911-2233','Inquilino',1600,42,36,true),unit('demo-a102','A','102','Carla Souza','Carla Souza','(47) 99922-3344','Proprietário residente',0,31,28,true),unit('demo-a103','A','103','Paulo Mendes','—','(47) 99933-4455','Vago',0,0,0,false),unit('demo-b201','B','201','Renata Costa','Renata Costa','(47) 99944-5566','Proprietário residente',0,28,23,false),unit('demo-b202','B','202','Luiz Ferreira','Pedro Alves','(47) 99955-6677','Inquilino',1350,37,31,false),unit('demo-c301','C','301','Fernanda Rocha','Fernanda Rocha','(47) 99966-7788','Proprietário residente',0,34,26,true)];
+  S.unidades=[unit('demo-a101','A','101','Marcos Silva','João e Ana Lima','(47) 99911-2233','Inquilino',1600,42,36,false),unit('demo-a102','A','102','Carla Souza','Carla Souza','(47) 99922-3344','Proprietário residente',0,31,28,true),unit('demo-a103','A','103','Paulo Mendes','—','(47) 99933-4455','Vago',0,0,0,false),unit('demo-b201','B','201','Renata Costa','Renata Costa','(47) 99944-5566','Proprietário residente',0,28,23,false),unit('demo-b202','B','202','Luiz Ferreira','Pedro Alves','(47) 99955-6677','Inquilino',1350,37,31,false),unit('demo-c301','C','301','Fernanda Rocha','Fernanda Rocha','(47) 99966-7788','Proprietário residente',0,34,26,true)];
   S.unidades[0].parkingSpaces=['12','13'];S.unidades[4].parkingSpaces=['V-07'];
   S.taxas=[{id:'demo-taxa-1',nome:'Fundo de reserva',valor:90,modo:'rateio',aplica:'ocupadas',unidades:[],inicio:MES,fim:''}];
   S.despesas=[{id:'demo-d1',desc:'Manutenção do elevador',cat:'Manutenção',valor:680,data:MES+'-05',fornecedor:'Elevatec'},{id:'demo-d2',desc:'Limpeza das áreas comuns',cat:'Serviços',valor:420,data:MES+'-11',fornecedor:'Equipe Limpa'}];
   S.visitantes=[{id:'demo-v1',nome:'Roberto Almeida',doc:'***.***.***-12',unidade:'A-101',entrada:now(),saida:''}];S.encomendas=[{id:'demo-e1',unidade:'B-202',transp:'Correios',chegada:now(),retirada:'',avisado:''}];
   S.chamados=[{id:'demo-c1',unidade:'A-102',titulo:'Lâmpada queimada no corredor',status:'Aberto',data:MES+'-09'},{id:'demo-c2',unidade:'B-202',titulo:'Verificar vazamento na cozinha',status:'Em andamento',data:MES+'-12'}];S.comunicados=[{id:'demo-n1',titulo:'Limpeza da caixa d’água',texto:'A limpeza será realizada na próxima terça-feira, das 9h às 12h.',data:MES+'-02'}];
-  S.meios=[{id:'demo-m1',nome:'PIX do condomínio',tipo:'pix',ativo:true,dados:{chave:'financeiro@jardimdasflores.com.br',favorecido:'Residencial Jardim das Flores'},instrucoes:'Informe o pagamento para conferência.'}];S.pagamentos=[{id:'demo-p1',unidadeId:'demo-b202',unidade:'B-202',mes:MES,valor:410,meio:'PIX',data:now(),status:'Aguardando conferência'}];S.historico=[['Mai',2800,1050],['Jun',3120,980],['Jul',2950,1210],['Ago',3280,920],['Set',3050,1140],['Out',3260,1100]];render();
+  S.meios=[{id:'demo-m1',nome:'PIX do condomínio',tipo:'pix',ativo:true,dados:{chave:'financeiro@jardimdasflores.com.br',favorecido:'Residencial Jardim das Flores'},instrucoes:'Após pagar, informe o pagamento para conferência.'},{id:'demo-mp',nome:'Mercado Pago',tipo:'mercadopago',ativo:true,dados:{email:'financeiro@jardimdasflores.com.br',pix:true,cartao:true,boleto:true},instrucoes:'Opção ilustrativa; a demonstração não processa pagamentos.'}];S.pagamentos=[{id:'demo-p1',unidadeId:'demo-b202',unidade:'B-202',mes:MES,valor:410,meio:'PIX',data:now(),status:'Aguardando conferência'}];S.historico=[['Mai',2800,1050],['Jun',3120,980],['Jul',2950,1210],['Ago',3280,920],['Set',3050,1140],['Out',3260,1100]];render();
 }
 var S=seed();
 var saveQueue=Promise.resolve();
@@ -329,7 +329,7 @@ function registrarPag(m,status){var u=unitByLabel(MY)||S.unidades[0],c=cobranca(
   S.pagamentos.push({id:uid(),unidadeId:u.id,unidade:uLabel(u),mes:MES,valor:c.total,meio:m.nome,meioId:m.id,data:now(),status:status});
   if(status==='Confirmado')u.pago[MES]=true;save()}
 function pagarHtml(u,c,p){
-  var h='<div class="panel" style="margin-bottom:16px"><h3>Como pagar</h3>';
+  var h='<div class="panel" id="resident-payment-options" tabindex="-1" style="margin-bottom:16px"><h3>Como pagar</h3>';
   var regs=S.pagamentos.filter(function(x){return x.unidadeId===u.id&&x.mes===MES}),ult=regs[regs.length-1];
   if(p)return h+'<p class="note" style="margin:0">Pagamento de '+MES_LABEL+' confirmado'+(ult&&ult.status==='Confirmado'?' via '+esc(ult.meio):'')+'.</p></div>';
   var ativos=S.meios.filter(function(m){return m.ativo});
@@ -339,7 +339,7 @@ function pagarHtml(u,c,p){
   if(ult&&ult.status==='Recusado')h+='<p class="note"><span class="pill bad">Recusado</span> O síndico não confirmou o pagamento enviado via '+esc(ult.meio)+'. Confira o valor e avise de novo.</p>';
   return h+'<div class="list">'+ativos.map(function(m){
     var acao=m.tipo==='mercadopago'?'<button class="btn sm" data-mp="'+m.id+'">Pagar com Mercado Pago (simulação)</button>':
-      (m.tipo==='pix'?'<button class="btn sm ghost" data-copy-key="'+m.id+'">Copiar chave</button>':'')+'<button class="btn sm" data-informar="'+m.id+'">Já paguei</button>';
+      (m.tipo==='pix'?'<button class="btn sm ghost" data-copy-key="'+m.id+'">Copiar chave PIX</button>':'')+'<button class="btn sm" data-informar="'+m.id+'">Informar pagamento</button>';
     return '<div class="item"><div><b>'+esc(m.nome)+'</b><p>'+meioResumo(m)+'</p>'+(m.instrucoes?'<p>'+esc(m.instrucoes)+'</p>':'')+'</div><div class="row-actions">'+acao+'</div></div>'}).join('')+'</div></div>';
 }
 
@@ -488,7 +488,7 @@ function vMinha(){
   var unitDisplay=role==='morador'?'<div><small>Minha unidade</small><b>'+esc(ul)+'</b></div>':'<div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div>';
   return head('Minha unidade',esc(COND)+' · '+ul+' · '+MES_LABEL)+
   '<div class="panel"><div class="unit-card">'+unitDisplay+'<div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Morador</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
-  '<div class="grid"><div class="panel"><h3>Valores do mês</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+
+  '<div class="grid"><div class="panel"><h3>Valores do mês</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div>'+(!p?'<button class="btn" type="button" data-open-payment-options style="margin-top:16px">Pagar cobrança · '+brl(c.total)+'</button><p class="note">Escolha uma das formas de pagamento habilitadas pelo síndico.</p>':'')+'</div>'+
   '<div>'+pagarHtml(u,c,p)+'<div class="panel"><h3>Encomendas na portaria</h3>'+(enc.length?'<div class="list">'+enc.map(function(e){return '<div class="item"><div><b>'+esc(e.transp)+'</b><p>chegou '+fmtDT(e.chegada)+'</p></div><span class="pill warn">Aguardando retirada</span></div>'}).join('')+'</div>':'<p class="empty">Nenhuma encomenda aguardando.</p>')+'</div>'+
   '<div class="panel" style="margin-top:16px"><h3>Último comunicado</h3>'+(S.comunicados[0]?'<b>'+esc(S.comunicados[0].titulo)+'</b><p style="color:var(--muted)">'+esc(S.comunicados[0].texto)+'</p>':'<p class="empty">Sem comunicados.</p>')+'</div></div></div>'+(role==='morador'?vTenantCalls(ul):'');
 }
@@ -515,6 +515,7 @@ document.addEventListener('change',function(e){
 });
 document.addEventListener('click',async function(e){
   if(e.target.matches('[data-unit-modal-backdrop]')){closeUnitModal();return}
+  if(e.target.closest('[data-open-payment-options]')){var payPanel=document.getElementById('resident-payment-options');if(payPanel)payPanel.scrollIntoView({behavior:'smooth',block:'center'});return}
   var financeTabButton=e.target.closest('[data-ftab]');if(financeTabButton){financeTab=financeTabButton.dataset.ftab;render();return}
   var unitTabButton=e.target.closest('[data-unit-tab]');if(unitTabButton){unitTab=unitTabButton.dataset.unitTab;render();return}
   var blockTabButton=e.target.closest('[data-block-tab]');if(blockTabButton){activeBlock=blockTabButton.dataset.blockTab;render();return}
@@ -555,7 +556,7 @@ document.addEventListener('click',async function(e){
   if(d.pagNo){f=S.pagamentos.filter(function(x){return x.id===d.pagNo})[0];f.status='Recusado';save();toast('Pagamento recusado');return}
   if(d.copyKey){f=S.meios.filter(function(x){return x.id===d.copyKey})[0];var k=(f.dados&&f.dados.chave)||'';try{navigator.clipboard.writeText(k).then(function(){flash('Chave PIX copiada')},function(){flash(k)})}catch(x){flash(k)}return}
   if(d.informar){f=S.meios.filter(function(x){return x.id===d.informar})[0];registrarPag(f,'Aguardando conferência');toast('Pagamento informado. Aguarde a confirmação do síndico');return}
-  if(d.mp){f=S.meios.filter(function(x){return x.id===d.mp})[0];registrarPag(f,'Confirmado');toast('Pagamento aprovado (simulação) e fatura baixada');return}
+  if(d.mp){flash('A integração real com o Mercado Pago ainda não está conectada. Nenhum pagamento foi processado.');return}
   if(d.endTaxa){f=S.taxas.filter(function(x){return x.id===d.endTaxa})[0];f.fim=MES;save();toast('Taxa encerrada após '+MES_LABEL);return}
   if(d.delTaxa){var dt=await supabase.from('taxas_adicionais').delete().eq('condominio_id',CONDO_ID).eq('id',d.delTaxa);if(dt.error){flash('A taxa não pode ser removida enquanto houver cobranças vinculadas: '+dt.error.message);return}S.taxas=S.taxas.filter(function(x){return x.id!==d.delTaxa});save();toast('Taxa excluída');return}
   if(d.out){f=S.visitantes.filter(function(x){return x.id===d.out})[0];f.saida=now();save();toast('Saída registrada');return}

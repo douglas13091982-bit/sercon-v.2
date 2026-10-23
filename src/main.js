@@ -36,8 +36,8 @@ var NAV={
 };
 var ROLE_LABEL={sindico:'Síndico',portaria:'Portaria',morador:'Morador'};
 var uLabel=function(u){return u.bloco+'-'+u.apto};
-var splitNames=function(value){return String(value||'').split(/[,
-;]/).map(function(name){return name.trim()}).filter(Boolean)};\nvar splitPhones=function(value){return String(value||'').split(/\\r?\\n/).map(function(phone){return phone.trim()})};
+var splitNames=function(value){return String(value||'').split(/[,\n;]/).map(function(name){return name.trim()}).filter(Boolean)};
+var splitPhones=function(value){return String(value||'').split(/\r?\n/).map(function(phone){return phone.trim()})};
 var unitByLabel=function(l){return S.unidades.filter(function(u){return uLabel(u)===l})[0]};
 var paid=function(u){return !!u.pago[MES]};
 var r2=function(v){return Math.round(v*100)/100};

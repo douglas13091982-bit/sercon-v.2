@@ -1,10 +1,6 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>CondoGestor</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>CondoGestor</title><meta name="theme-color" content="#0b7a75"><meta name="description" content="Gestão de condomínios: cobranças, moradores, portaria e comunicados."><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b7a75'/%3E%3Ctext x='32' y='45' font-size='38' font-family='Arial' font-weight='700' text-anchor='middle' fill='white'%3EC%3C/text%3E%3C/svg%3E"><link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Schibsted+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Schibsted+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>
 /* Layout: barra lateral fixa no desktop, abas no topo no celular; conteudo em paineis com tabelas densas. */
 :root{
   --bg:#f3f5f6; --surface:#ffffff; --surface-2:#eaeff1; --line:#d7dfe3;
@@ -222,9 +218,33 @@ form.f label.chk{flex-direction:row;align-items:center;gap:6px;color:var(--fg);f
 .resident-shortcut{box-shadow:0 1px 3px rgba(16,35,43,.1);transition:border-color .15s,box-shadow .15s,transform .1s}
 .resident-shortcut:hover{border-color:var(--accent);box-shadow:0 4px 12px rgba(11,122,117,.18);transform:translateY(-1px)}
 .resident-shortcut:active{transform:translateY(1px)}
-</style>
 
-<div class="shell" id="app"></div>
+/* ---- Painel: o que precisa de atencao ---- */
+.todo-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.todo{display:flex;align-items:center;gap:12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;color:var(--fg);box-shadow:0 1px 3px rgba(16,35,43,.08);transition:border-color .15s,box-shadow .15s,transform .1s}
+.todo:hover{border-color:var(--accent);box-shadow:0 4px 14px rgba(11,122,117,.18);transform:translateY(-1px)}
+.todo b{font-family:var(--font-data);font-weight:500;font-size:24px;min-width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--ok-soft);color:var(--ok);padding:0 6px}
+.todo.has b{background:var(--warn-soft);color:var(--warn)}
+.todo span{font-size:14px;font-weight:600;line-height:1.25}
+/* ---- Busca e filtros ---- */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.toolbar input[type="search"]{flex:1 1 240px;width:auto}
+.toolbar select{width:auto;flex:0 0 auto}
+/* ---- Cartoes dos apartamentos ---- */
+.unit-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.unit-tile-head{flex-wrap:wrap;row-gap:4px}
+.unit-tile-head>b{white-space:nowrap;overflow-wrap:normal}
+/* ---- Telas de acesso ---- */
+body:has(#app.auth){background:radial-gradient(1100px 520px at 50% -10%,var(--accent-soft),transparent 70%),var(--bg)}
+.auth-card{border-radius:16px;padding:28px;box-shadow:0 24px 60px rgba(16,35,43,.14)}
+.auth-card .brand{margin-bottom:22px!important}
+.auth-card .brand-mark{width:44px;height:44px;border-radius:12px;font-size:22px}
+.auth-card .brand h1{font-size:23px}
+.auth-card form.f{border-bottom:0;padding-bottom:0;margin-bottom:10px}
+.auth-card form.f .btn{grid-column:1/-1;padding:11px 16px}
+.auth-card input,.auth-card select{padding:10px 12px}
+.auth-card>.btn{width:100%}
+</style></head><body><div class="shell" id="app"></div>
 
 <script type="module" src="/src/main.js"></script>
 

@@ -1,14 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 
 (function(){
-var MES=new Date().toISOString().slice(0,7), MES_LABEL='', COND='', CONDO_ID='', USER=null, DB_READY=false, BLOCK_IDS={}, CURRENT_MORADOR=null, RESIDENT_INVITES={};
+var MES=ymLocal(), MES_LABEL='', COND='', CONDO_ID='', USER=null, DB_READY=false, BLOCK_IDS={}, CURRENT_MORADOR=null, RESIDENT_INVITES={};
 var supabaseUrl=import.meta.env.VITE_SUPABASE_URL;
 var supabaseKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 var supabase=(supabaseUrl&&supabaseKey)?createClient(supabaseUrl,supabaseKey):null;
 var brl=function(v){return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var uid=function(){return crypto.randomUUID()};
-var now=function(){var d=new Date();return d.toISOString().slice(0,16)};
+var padd=function(n){return String(n).padStart(2,'0')};
+function ymLocal(){var d=new Date();return d.getFullYear()+'-'+padd(d.getMonth()+1)}
+function todayLocal(){var d=new Date();return d.getFullYear()+'-'+padd(d.getMonth()+1)+'-'+padd(d.getDate())}
+function safeName(n){return String(n||'arquivo').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9._-]+/g,'_').slice(-120)}
+var now=function(){var d=new Date();return todayLocal()+'T'+padd(d.getHours())+':'+padd(d.getMinutes())};
 var fmtDT=function(s){if(!s)return '';var d=new Date(s);return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})};
 var fmtD=function(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]};
 
@@ -25,10 +29,12 @@ async function refreshPaymentConfig(){
   if(MP_CONFIG.method){var m=MP_CONFIG.method;S.meios=[{id:m.id,nome:m.nome,tipo:m.tipo,ativo:true,dados:m.dados_publicos||{},instrucoes:m.instrucoes||''}]}
   else S.meios=[];
 }
-function save(){if(DB_READY&&role!=='morador')saveQueue=saveQueue.catch(function(){}).then(function(){return role==='portaria'?persistPortariaWorkspace():persistWorkspace()}).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
+var savePending=false;
+function save(){if(!DB_READY||role==='morador'||savePending)return;savePending=true;saveQueue=saveQueue.catch(function(){}).then(function(){savePending=false;return role==='portaria'?persistPortariaWorkspace():persistWorkspace()}).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
 
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas', unitTab='apartamentos', activeBlock='', activeUnitId='', editingTenant=false;
 var MY='A-302';
+var finQ='',finSt='todos',unitQ='',THEME='auto',RECOVERY=/type=recovery/.test(location.hash),authEmail='';
 var NAV={
   sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['acessos','Acessos dos moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['equipe_portaria','Equipe da portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
@@ -40,9 +46,13 @@ var splitNames=function(value){return String(value||'').split(/[,\n;]/).map(func
 var splitPhones=function(value){return String(value||'').split(/\r?\n/).map(function(phone){return phone.trim()})};
 var unitByLabel=function(l){return S.unidades.filter(function(u){return uLabel(u)===l})[0]};
 var paid=function(u){return !!u.pago[MES]};
+var dueDay=function(){return Math.max(1,Math.min(28,Number(S.config.vencimentoDia||10)))};
+var dueDate=function(mes){return mes+'-'+padd(dueDay())};
+var isLate=function(mes){return todayLocal()>dueDate(mes)};
+function lateFor(){if(role==='morador'){var ds=cobrancaMorador(MES).items.map(function(x){return x.vencimento}).filter(Boolean).sort();return todayLocal()>(ds[0]||dueDate(MES))}return isLate(MES)}
 var r2=function(v){return Math.round(v*100)/100};
 var NOMES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-var MESES=(function(){var out=[],d=new Date();d.setDate(1);d.setMonth(d.getMonth()-12);for(var i=0;i<25;i++){out.push(d.toISOString().slice(0,7));d.setMonth(d.getMonth()+1)}return out})();
+var MESES=(function(){var out=[],d=new Date(),y=d.getFullYear(),m=d.getMonth()-12;for(var i=0;i<25;i++){var yy=y+Math.floor(m/12),mm=((m%12)+12)%12+1;out.push(yy+'-'+padd(mm));m++}return out})();
 var mesLabel=function(m){return NOMES[+m.slice(5)-1]+'/'+m.slice(0,4)};
 var mesCurto=function(m){return NOMES[+m.slice(5)-1].slice(0,3)+'/'+m.slice(2,4)};
 var setMes=function(m){MES=m;MES_LABEL=mesLabel(m)};
@@ -73,14 +83,19 @@ var tdTaxas=function(u){return taxasMes().map(function(t){var v=taxaValor(t,u,ME
 var cobranca=function(u){var alu=u.aluguel||0,t=Number(S.config.taxaCondominio||u.taxa||0),a=calcAgua(u),g=r2(lei(u,'gas')*tarifaDe(MES));
   var ex=extrasDe(u,MES),sx=r2(ex.reduce(function(s,e){return s+e.valor},0));
   return {taxa:t,agua:a,gas:g,extras:ex,extrasTotal:sx,aluguel:alu,total:r2(t+a+g+sx+(S.config.cobrarAluguel?alu:0))}};
-function cobrancaMorador(mes){var base=(S.residentCharges||[]).filter(function(x){return x.competencia===mes+'-01'}),extra=(S.residentExtraCharges||[]).filter(function(x){return x.competencia===mes+'-01'}),items=base.concat(extra).map(function(x){return {descricao:x.descricao||'Cobrança',valor:Number(x.valor||0),status:x.status||'pendente'}});return {items:items,total:r2(items.reduce(function(sum,x){return sum+x.valor},0)),paid:items.length>0&&items.every(function(x){return x.status==='pago'})}}
+function cobrancaMorador(mes){var base=(S.residentCharges||[]).filter(function(x){return x.competencia===mes+'-01'}),extra=(S.residentExtraCharges||[]).filter(function(x){return x.competencia===mes+'-01'}),items=base.concat(extra).map(function(x){return {descricao:x.descricao||'Cobrança',valor:Number(x.valor||0),status:x.status||'pendente',vencimento:x.vencimento||''}});return {items:items,total:r2(items.reduce(function(sum,x){return sum+x.valor},0)),paid:items.length>0&&items.every(function(x){return x.status==='pago'})}}
 var totalEsperado=function(){return S.unidades.reduce(function(a,u){return a+cobranca(u).total},0)};
 var totalArrecadado=function(){return S.unidades.reduce(function(a,u){return a+(paid(u)?cobranca(u).total:0)},0)};
 var totalDespesas=function(){return despMes().reduce(function(a,d){return a+d.valor},0)};
-function unitOptions(){return S.unidades.map(function(u){return '<option>'+uLabel(u)+'</option>'}).join('')}
+function cobrancaTexto(f){var c=cobranca(f);return 'Olá, '+(f.dono||f.morador)+'. Cobrança de '+MES_LABEL+' da unidade '+uLabel(f)+': taxa '+brl(c.taxa)+', água '+brl(c.agua)+', gás '+brl(c.gas)+c.extras.map(function(e){return ', '+e.nome.toLowerCase()+' '+brl(e.valor)}).join('')+(S.config.cobrarAluguel&&c.aluguel?', aluguel '+brl(c.aluguel):'')+'. Total '+brl(c.total)+', com vencimento em '+fmtD(dueDate(MES))+'. Pedimos a regularização. Administração do '+COND+'.'}
+function waCobranca(u){var d=String(u.tel||'').replace(/\D/g,'');if(d.length<10)return '';if(d.length<=11)d='55'+d;return 'https://wa.me/'+d+'?text='+encodeURIComponent(cobrancaTexto(u))}
+function unitOptions(){return S.unidades.map(function(u){return '<option>'+esc(uLabel(u))+'</option>'}).join('')}
 function flash(m){var d=document.createElement('div');d.className='toast';d.setAttribute('role','status');d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},2600)}
-function toast(m){toastMsg=m;render();setTimeout(function(){toastMsg='';render()},2200)}
+function toast(m){toastMsg=m;render();setTimeout(function(){toastMsg='';var t=document.querySelector('#app .toast');if(t)t.remove()},2200)}
 
+function applyTheme(){var r=document.documentElement;if(THEME==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',THEME)}
+function themeLabel(){return THEME==='dark'?'escuro':THEME==='light'?'claro':'automático'}
+try{THEME=localStorage.getItem('condogestor-theme')||'auto'}catch(x){}
 function shell(){
   var items=NAV[role].filter(function(i){return role!=='sindico'||i[0]!=='portaria'||PORTARIA_CONFIG.habilitada});
   if(!items.some(function(i){return i[0]===view}))view=items[0][0];
@@ -102,9 +117,10 @@ function shell(){
   var residentHeader=resident?'<header class="resident-app-header"><div class="resident-app-brand"><div class="brand-mark">C</div><div><b>CondoGestor</b><small>'+esc(COND)+'</small></div></div><label class="resident-month"><span>Mês</span><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></label></header>':'';
   var body={dashboard:vDash,unidades:vUnits,acessos:vAccesses,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,equipe_portaria:vEquipePortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
-    '<div class="roles"><label>Sessão</label><button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
+    '<div class="roles"><label>Sessão</label><button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button><button class="btn ghost sm" type="button" data-theme-toggle>Tema: '+themeLabel()+'</button></div>'+
     (resident?'':'<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div>')+'<nav>'+navHtml+'</nav></aside><main class="'+(resident?'resident-main':'')+'">'+residentHeader+body+mobileNav+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
 }
+function todoCard(label,n,nav,tab){return '<button type="button" class="todo'+(n?' has':'')+'" data-nav="'+nav+'"'+(tab?' data-ftab-set="'+tab+'"':'')+'><b>'+n+'</b><span>'+label+'</span></button>'}
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
 
 var authMode='login', authNotice='';
@@ -112,11 +128,11 @@ function setShell(on){var app=document.getElementById('app');if(app)app.classNam
 function renderAuth(){
   var app=document.getElementById('app');
   setShell(false);
-  if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Sistema indisponível</h2><p class="note">O acesso ao banco de dados não está configurado neste ambiente. Configure as variáveis do Supabase para habilitar cadastro e login.</p></div></main>';return}
+  if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel auth-card"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Sistema indisponível</h2><p class="note">O acesso ao banco de dados não está configurado neste ambiente. Configure as variáveis do Supabase para habilitar cadastro e login.</p></div></main>';return}
   var reg=authMode==='register',hasInvite=!!inviteTokenFromUrl();
-  app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':(hasInvite?'Entre com o e-mail convidado para vincular seu acesso ao apartamento.':'Acesse com seu e-mail e senha. Porteiros, vigilantes e moradores entram com o acesso enviado pelo síndico.'))+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
+  app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel auth-card"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':(hasInvite?'Entre com o e-mail convidado para vincular seu acesso ao apartamento.':'Acesse com seu e-mail e senha. Porteiros, vigilantes e moradores entram com o acesso enviado pelo síndico.'))+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
   '<form class="f" id="f-auth">'+(reg?'<label>Seu nome<input id="a-nome" required autocomplete="name"></label><label>Nome do condomínio<input id="a-cond" required></label><label>CNPJ (opcional)<input id="a-cnpj" inputmode="numeric"></label><label class="wide">Endereço (opcional)<input id="a-endereco" autocomplete="street-address"></label><label>Telefone do condomínio<input id="a-telefone" type="tel"></label><label>Taxa de condomínio mensal por apartamento (R$)<input id="a-taxa" type="number" min="0" step="0.01" value="0" required><small>Esse valor será cobrado de cada apartamento ocupado.</small></label><label>Vencimento da cobrança (dia)<input id="a-venc" type="number" min="1" max="28" value="10" required></label><label>Água<select id="a-agua"><option value="rateio">Rateio da conta do condomínio</option><option value="individual">Medidor e cobrança individual</option></select></label><label>Tarifa água (R$/m³)<input id="a-agua-tarifa" type="number" min="0" step="0.0001" value="0"></label><label>Tarifa gás (R$/m³)<input id="a-gas" type="number" min="0" step="0.0001" value="0"></label>':'')+
-  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form>'+(hasInvite?'':'<button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button>')+'</div></main>';
+  '<label>E-mail<input id="a-email" type="email" required autocomplete="email" value="'+esc(authEmail)+'"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form>'+(reg?'':'<button class="btn ghost" type="button" data-forgot>Esqueci minha senha</button> ')+(hasInvite?'':'<button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button>')+'</div></main>';
 }
 function renderLoading(message){setShell(false);document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
 var pendingInviteToken='';
@@ -124,7 +140,11 @@ function inviteTokenFromUrl(){return new URLSearchParams(location.search).get('c
 function clearInviteTokenFromUrl(){var url=new URL(location.href);url.searchParams.delete('convite');history.replaceState({},'',url.pathname+url.search+url.hash)}
 function renderResidentPassword(notice){
   setShell(false);var app=document.getElementById('app');
-  app.innerHTML='<main style="max-width:480px;margin:10vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Ative seu acesso de morador</small></div></div><h2>Crie sua senha</h2><p class="note">Depois de definir a senha, você poderá entrar no aplicativo com este e-mail.</p>'+(notice?'<p class="pill warn" style="margin:10px 0">'+esc(notice)+'</p>':'')+'<form class="f" id="f-resident-password"><label>Nova senha<input id="resident-new-password" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirme a senha<input id="resident-confirm-password" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn" type="submit">Definir senha e acessar</button></form><button class="btn ghost" type="button" data-signout>Sair desta conta</button></div></main>';
+  app.innerHTML='<main style="max-width:480px;margin:10vh auto;padding:0 16px;width:100%"><div class="panel auth-card"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Ative seu acesso de morador</small></div></div><h2>Crie sua senha</h2><p class="note">Depois de definir a senha, você poderá entrar no aplicativo com este e-mail.</p>'+(notice?'<p class="pill warn" style="margin:10px 0">'+esc(notice)+'</p>':'')+'<form class="f" id="f-resident-password"><label>Nova senha<input id="resident-new-password" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirme a senha<input id="resident-confirm-password" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn" type="submit">Definir senha e acessar</button></form><button class="btn ghost" type="button" data-signout>Sair desta conta</button></div></main>';
+}
+function renderRecovery(notice){
+  setShell(false);var app=document.getElementById('app');
+  app.innerHTML='<main style="max-width:480px;margin:10vh auto;padding:0 16px;width:100%"><div class="panel auth-card"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Redefinir senha</small></div></div><h2>Crie uma nova senha</h2><p class="note">Digite a nova senha para voltar a acessar o sistema.</p>'+(notice?'<p class="pill warn" style="margin:10px 0">'+esc(notice)+'</p>':'')+'<form class="f" id="f-recovery"><label>Nova senha<input id="recovery-new-password" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirme a senha<input id="recovery-confirm-password" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn" type="submit">Salvar nova senha</button></form></div></main>';
 }
 async function acceptResidentInvite(session,token){
   var accepted=await supabase.rpc('aceitar_convite',{_token:token});if(accepted.error)throw accepted.error;
@@ -241,6 +261,10 @@ async function loadWorkspace(session){
   D.taxasCobradas.forEach(function(c){var key=c.unidade_id+':'+c.competencia.slice(0,7);paidRows[key]=paidRows[key]||{total:0,paid:0};paidRows[key].total++;if(c.status==='pago')paidRows[key].paid++});
   Object.keys(paidRows).forEach(function(key){var parts=key.split(':'),u=S.unidades.find(function(x){return x.id===parts[0]});if(u&&paidRows[key].total&&paidRows[key].total===paidRows[key].paid)u.pago[parts[1]]=true});
   S.taxas=D.taxas.map(function(t){return {id:t.id,nome:t.nome,valor:Number(t.valor),modo:t.modo,aplica:t.aplica_a,unidades:D.taxasUnidades.filter(function(x){return x.taxa_id===t.id}).map(function(x){return x.unidade_id}),inicio:t.inicio.slice(0,7),fim:t.fim?t.fim.slice(0,7):''}});
+  S.histMes={};
+  var addHist=function(m,i,v){S.histMes[m]=S.histMes[m]||[0,0];S.histMes[m][i]+=v};
+  D.cobrancas.concat(D.taxasCobradas).forEach(function(c){if(c.status==='pago')addHist(c.competencia.slice(0,7),0,Number(c.valor||0))});
+  D.despesas.forEach(function(x){addHist(String(x.data).slice(0,7),1,Number(x.valor||0))});
   S.meios=D.meios.map(function(x){return {id:x.id,nome:x.nome,tipo:x.tipo,ativo:x.ativo,dados:x.dados_publicos||{},instrucoes:x.instrucoes||''}});
   S.pagamentos=D.pagamentos.map(function(x){return {id:x.id,unidadeId:x.unidade_id,unidade:(S.unidades.find(function(u){return u.id===x.unidade_id})||{}).bloco+'-'+(S.unidades.find(function(u){return u.id===x.unidade_id})||{}).apto,mes:x.competencia.slice(0,7),valor:Number(x.valor),meio:x.meio_nome_snapshot,meioId:x.meio_pagamento_id,data:x.informado_em,status:x.status==='confirmado'?'Confirmado':x.status==='recusado'?'Recusado':'Aguardando conferência'} });
   S.despesas=D.despesas.map(function(x){return {id:x.id,desc:x.descricao,cat:x.categoria,valor:Number(x.valor),data:x.data,fornecedor:x.fornecedor||''}});
@@ -315,20 +339,22 @@ function vDash(){
   var arrec=totalArrecadado(), esp=totalEsperado(), desp=totalDespesas(), emAberto=esp-arrec;
   var inad=S.unidades.filter(function(u){return !paid(u)});
   var ms=[],mm=MES;for(var i=0;i<6;i++){ms.unshift(mm);mm=prevMes(mm)}
-  var hist=ms.map(function(x){if(x===MES)return [mesCurto(x),arrec,desp];var ab=NOMES[+x.slice(5)-1].slice(0,3),h=S.historico.filter(function(y){return y[0]===ab})[0];return h?[mesCurto(x),h[1],h[2]]:[mesCurto(x),0,0]});
+  var hist=ms.map(function(x){if(x===MES)return [mesCurto(x),arrec,desp];var h=(S.histMes||{})[x];return h?[mesCurto(x),h[0],h[1]]:[mesCurto(x),0,0]});
   var max=Math.max(1,Math.max.apply(null,hist.map(function(h){return Math.max(h[1],h[2])})));
   var bars=hist.map(function(h){return '<div class="bar"><div class="pair"><i style="height:'+(h[1]/max*100).toFixed(1)+'%" title="Arrecadado '+brl(h[1])+'"></i><i class="d" style="height:'+(h[2]/max*100).toFixed(1)+'%" title="Despesas '+brl(h[2])+'"></i></div><span>'+h[0]+'</span></div>'}).join('');
   var dentro=S.visitantes.filter(function(v){return !v.saida});
   var enc=S.encomendas.filter(function(e){return !e.retirada});
   var ab=S.chamados.filter(function(c){return c.status!=='Resolvido'});
-  return head('Painel do síndico',MES_LABEL+' · '+S.unidades.length+' unidades')+
+  var aguard=S.pagamentos.filter(function(x){return x.status==='Aguardando conferência'}).length;
+  var todoHtml='<div class="todo-grid" aria-label="O que precisa de atenção">'+todoCard('Pagamentos para conferir',aguard,'financeiro','meios')+todoCard(isLate(MES)?'Cobranças em atraso':'Cobranças em aberto',inad.length,'financeiro','cobrancas')+todoCard('Chamados em aberto',ab.length,'comunicacao','')+(PORTARIA_CONFIG.habilitada?todoCard('Encomendas aguardando',enc.length,'portaria',''):'')+'</div>';
+  return head('Painel do síndico',MES_LABEL+' · '+S.unidades.length+' unidades')+todoHtml+
   '<div class="kpis">'+
    '<div class="kpi"><span>Arrecadado</span><b>'+brl(arrec)+'</b><small>de '+brl(esp)+'</small></div>'+
    '<div class="kpi"><span>Em aberto</span><b style="color:var(--bad)">'+brl(emAberto)+'</b><small>'+inad.length+' unidades</small></div>'+
    '<div class="kpi"><span>Despesas</span><b>'+brl(desp)+'</b><small>'+despMes().length+' lançamentos</small></div>'+
    '<div class="kpi"><span>Saldo do mês</span><b style="color:'+(arrec-desp>=0?'var(--ok)':'var(--bad)')+'">'+brl(arrec-desp)+'</b><small>arrecadado menos despesas</small></div></div>'+
   '<div class="grid"><div class="panel"><h3>Receita e despesa, últimos 6 meses</h3><div class="bars">'+bars+'</div><div class="legend"><span><b style="background:var(--accent)"></b>Arrecadado</span><span><b style="background:var(--warn)"></b>Despesas</span></div></div>'+
-  '<div class="panel"><h3>Taxas em atraso</h3>'+(inad.length?'<div class="list">'+inad.map(function(u){return '<div class="item"><div><b>'+uLabel(u)+'</b> · '+esc(u.dono)+'<p>vencimento 10/10 · '+esc(u.tel)+'</p></div><span class="num">'+brl(cobranca(u).total)+'</span></div>'}).join('')+'</div>':'<p class="empty">Nenhuma unidade em atraso.</p>')+'</div></div>'+
+  '<div class="panel"><h3>'+(isLate(MES)?'Taxas em atraso':'Cobranças em aberto')+'</h3>'+(inad.length?'<div class="list">'+inad.map(function(u){return '<div class="item"><div><b>'+esc(uLabel(u))+'</b> · '+esc(u.dono)+'<p>vencimento '+fmtD(dueDate(MES))+' · '+esc(u.tel)+'</p></div><span class="num">'+brl(cobranca(u).total)+'</span></div>'}).join('')+'</div>':'<p class="empty">Nenhuma unidade com cobrança em aberto.</p>')+'</div></div>'+
   '<div class="grid"><div class="panel"><h3>Na portaria agora</h3>'+
     '<p style="margin:0 0 6px"><span class="pill warn">'+dentro.length+' visitantes dentro</span> <span class="pill mute">'+enc.length+' encomendas aguardando</span></p>'+
     '<div class="list">'+(dentro.map(function(v){return '<div class="item"><div><b>'+esc(v.nome)+'</b><p>para '+esc(v.unidade)+' · entrou '+fmtDT(v.entrada)+'</p></div></div>'}).join('')||'<p class="empty">Ninguém no condomínio.</p>')+'</div></div>'+
@@ -358,12 +384,13 @@ var tenantEditor=function(u){
     :u.situacao==='Proprietário residente'?'<div class="unit-detail-actions"><div><h4>Ocupação do proprietário</h4><p class="note">Os dados desta unidade podem ser atualizados ou convertidos em uma locação.</p></div><button class="btn sm ghost" type="button" data-edit-tenant>Cadastrar moradores e aluguel</button></div>':'';
   return '<div class="unit-modal-backdrop" data-unit-modal-backdrop><section class="panel unit-detail" role="dialog" aria-modal="true" aria-labelledby="unit-modal-title"><div class="unit-detail-head"><div><h3 id="unit-modal-title">Apartamento '+esc(u.apto)+'</h3><p class="note">Bloco '+esc(u.bloco)+' · '+esc(u.situacao)+'</p></div><button class="btn sm ghost" type="button" data-close-unit data-unit-modal-close aria-label="Fechar detalhes do apartamento">Fechar</button></div><div class="unit-detail-grid"><div><small>Proprietário</small><b>'+esc(u.dono||'—')+'</b></div><div><small>Moradores/inquilinos</small><b>'+esc(u.morador||'—')+'</b></div><div><small>Contato</small><b>'+esc(u.tel||'—')+'</b></div><div><small>Condomínio mensal</small><b>'+brl(c.taxa)+'</b></div><div><small>Aluguel</small><b>'+(u.aluguel?brl(u.aluguel):'—')+'</b></div><div><small>Medidor de água</small><b>'+esc(u.waterMeter||'—')+'</b></div><div><small>Medidor de gás</small><b>'+esc(u.gasMeter||'—')+'</b></div><div><small>Vagas de estacionamento</small><b>'+(u.parkingSpaces&&u.parkingSpaces.length?u.parkingSpaces.map(esc).join(', '):'—')+'</b></div></div><p>Taxas adicionais: '+(extras.length?extras.map(function(x){return esc(x.nome)+' '+brl(x.valor)}).join(' · '):'—')+'</p><div class="unit-tile-actions">'+(u.contractPath?'<button class="btn sm ghost" data-contract="'+esc(u.contractPath)+'">'+(isVacant?'Abrir último contrato':'Abrir contrato')+'</button>':'<span class="pill mute">Sem contrato</span>')+'<button class="btn sm danger" data-del-unit="'+esc(u.id)+'">Remover apartamento</button></div>'+current+form+access+'</section></div>';
 };
-  var blockPanels=blocks.map(function(bl){var us=S.unidades.filter(function(u){return u.bloco===bl}).sort(function(a,b){return a.apto.localeCompare(b.apto,undefined,{numeric:true})}),cards=us.map(function(u){return '<article class="unit-tile" role="button" tabindex="0" aria-expanded="'+(activeUnitId===u.id)+'" data-open-unit="'+esc(u.id)+'"><div class="unit-tile-head"><b>Apto '+esc(u.apto)+'</b><span class="pill '+(u.situacao==='Vago'?'mute':u.situacao==='Inquilino'?'warn':'ok')+'">'+(u.situacao==='Proprietário residente'?'Proprietário':esc(u.situacao))+'</span></div><p>'+esc(u.morador&&u.morador!=='—'?u.morador:'Sem morador cadastrado')+'</p></article>'}).join(''),selected=S.unidades.find(function(u){return u.id===activeUnitId&&u.bloco===bl});return '<section class="block-column"><h3>Bloco '+esc(bl)+'<span class="pill mute">'+us.length+' aptos</span></h3><div class="unit-grid">'+cards+'</div>'+(selected?tenantEditor(selected):'')+'</section>'});
+  var unitTile=function(u,showBlock){return '<article class="unit-tile" role="button" tabindex="0" aria-expanded="'+(activeUnitId===u.id)+'" data-open-unit="'+esc(u.id)+'"><div class="unit-tile-head"><b>'+(showBlock?'Bloco '+esc(u.bloco)+' · ':'')+'Apto '+esc(u.apto)+'</b><span class="pill '+(u.situacao==='Vago'?'mute':u.situacao==='Inquilino'?'warn':'ok')+'">'+(u.situacao==='Proprietário residente'?'Proprietário':esc(u.situacao))+'</span></div><p>'+esc(u.morador&&u.morador!=='—'?u.morador:'Sem morador cadastrado')+'</p></article>'};
+  var blockPanels=blocks.map(function(bl){var us=S.unidades.filter(function(u){return u.bloco===bl}).sort(function(a,b){return a.apto.localeCompare(b.apto,undefined,{numeric:true})}),cards=us.map(function(u){return unitTile(u)}).join(''),selected=S.unidades.find(function(u){return u.id===activeUnitId&&u.bloco===bl});return '<section class="block-column"><h3>Bloco '+esc(bl)+'<span class="pill mute">'+us.length+(us.length===1?' apto':' aptos')+'</span></h3><div class="unit-grid">'+cards+'</div>'+(selected?tenantEditor(selected):'')+'</section>'});
   var tabBar='<div class="subtabs" role="tablist" aria-label="Unidades e moradores"><button type="button" role="tab" data-unit-tab="apartamentos" aria-selected="'+(unitTab==='apartamentos')+'">Apartamentos por bloco</button><button type="button" role="tab" data-unit-tab="cadastro" aria-selected="'+(unitTab==='cadastro')+'">Cadastrar unidade</button></div>';
   var settingsAndForm='<div class="panel"><h3>Taxa padrão do condomínio</h3><form class="f" id="f-config"><label>Valor mensal (R$)<input id="cfg-taxa" type="number" min="0" step="0.01" value="'+Number(S.config.taxaCondominio||0)+'" required></label><label>Dia de vencimento<input id="cfg-venc" type="number" min="1" max="28" value="'+Number(S.config.vencimentoDia||10)+'" required></label><button class="btn" type="submit">Salvar cobrança padrão</button></form><p class="note">O valor padrão é aplicado automaticamente às unidades ocupadas; o síndico pode gerar ou recalcular as cobranças do mês no Financeiro.</p></div>'+
   '<div class="panel"><h3>Nova unidade</h3><form class="f" id="f-unit">'+
-   '<label>Bloco<input id="u-bloco" required maxlength="3" placeholder="A"></label>'+
-   '<label>Apartamento<input id="u-apto" required maxlength="6" placeholder="401"></label>'+
+   '<label>Bloco<input id="u-bloco" required maxlength="3" pattern="[A-Za-z0-9]{1,3}" title="Use letras e números" placeholder="A"></label>'+
+   '<label>Apartamento<input id="u-apto" required maxlength="6" pattern="[A-Za-z0-9]{1,6}" title="Use letras e números" placeholder="401"></label>'+
    '<label>Proprietário<input id="u-dono" required></label>'+
    '<div class="resident-contact-grid"><label>Moradores/inquilinos<textarea id="u-morador" rows="3" placeholder="Digite um nome por linha"></textarea><small>Você pode cadastrar várias pessoas no mesmo apartamento, uma por linha.</small></label>'+
    '<label>Telefones dos moradores/inquilinos<textarea id="u-telefones" rows="3" placeholder="Um telefone por linha, na mesma ordem dos nomes"></textarea><small>Informe um telefone para cada pessoa na mesma ordem dos nomes. Se alguém não tiver telefone, deixe a linha correspondente vazia.</small></label></div>'+
@@ -379,7 +406,12 @@ var tenantEditor=function(u){
   if(blocks.indexOf(activeBlock)<0)activeBlock=blocks[0]||'';
   var blockTabs=blocks.map(function(bl){return '<button type="button" role="tab" data-block-tab="'+esc(bl)+'" aria-selected="'+(bl===activeBlock)+'">Bloco '+esc(bl)+'</button>'}).join('');
   var apartmentBoard=blocks.length?'<div class="subtabs" role="tablist" aria-label="Blocos do condomínio">'+blockTabs+'</div><div class="block-board">'+blockPanels[blocks.indexOf(activeBlock)]+'</div>':'<div class="panel"><p class="empty">Nenhuma unidade cadastrada. Use a aba “Cadastrar unidade” para começar.</p></div>';
-  return head('Unidades e moradores',unitTab==='apartamentos'?'Apartamentos organizados por bloco. Abra um card para gerenciar a ocupação.':'Cadastre novas unidades e configure a cobrança padrão do condomínio.')+tabBar+(unitTab==='cadastro'?settingsAndForm:apartmentBoard);
+  var uq=unitQ.toLowerCase().trim();
+  var searchBox='<div class="toolbar"><input id="q-unit" type="search" placeholder="Buscar apartamento, morador, proprietário ou telefone" value="'+esc(unitQ)+'" aria-label="Buscar unidade"></div>';
+  var found=uq?S.unidades.filter(function(u){return (u.bloco+'-'+u.apto+' '+(u.dono||'')+' '+(u.morador||'')+' '+(u.tel||'')).toLowerCase().indexOf(uq)>-1}).sort(function(a,b){return uLabel(a).localeCompare(uLabel(b),undefined,{numeric:true})}):[];
+  var foundSel=found.find(function(u){return u.id===activeUnitId});
+  var searchPanel=uq?'<section class="block-column"><h3>Resultados da busca<span class="pill mute">'+found.length+'</span></h3>'+(found.length?'<div class="unit-grid">'+found.map(function(u){return unitTile(u,true)}).join('')+'</div>':'<p class="empty">Nenhum apartamento encontrado.</p>')+(foundSel?tenantEditor(foundSel):'')+'</section>':'';
+  return head('Unidades e moradores',unitTab==='apartamentos'?'Apartamentos organizados por bloco. Abra um card para gerenciar a ocupação.':'Cadastre novas unidades e configure a cobrança padrão do condomínio.')+tabBar+(unitTab==='cadastro'?settingsAndForm:searchBox+(uq?searchPanel:apartmentBoard));
 }
 
 function vAccesses(){
@@ -397,21 +429,35 @@ function vAccesses(){
     (rows.length?rows.join(''):'<div class="empty">Ainda não há moradores em locações cadastradas. Primeiro cadastre os moradores em <b>Unidades e moradores</b> e salve a locação; depois eles aparecerão aqui.</div>')+'</section>';
 }
 
+function finList(){var q=finQ.toLowerCase();return S.unidades.filter(function(u){var p=paid(u);if(finSt==='pagos'&&!p)return false;if(finSt==='abertos'&&p)return false;if(finSt==='atrasados'&&(p||!isLate(MES)))return false;if(!q)return true;return (uLabel(u)+' '+(u.dono||'')+' '+(u.morador||'')).toLowerCase().indexOf(q)>-1})}
+function finToolbar(){var o=function(v,l){return '<option value="'+v+'"'+(finSt===v?' selected':'')+'>'+l+'</option>'};return '<div class="toolbar"><input id="q-fin" type="search" placeholder="Buscar unidade ou responsável" value="'+esc(finQ)+'" aria-label="Buscar cobrança"><select id="q-fin-st" aria-label="Filtrar por situação">'+o('todos','Todas as situações')+o('abertos','Em aberto')+o('atrasados','Em atraso')+o('pagos','Pagas')+'</select><button class="btn sm ghost" type="button" data-export-cob>Exportar CSV</button><button class="btn sm ghost" type="button" data-print-report>Imprimir relatório</button></div>'}
+var csvNum=function(v){return Number(v||0).toFixed(2).replace('.',',')};
+function downloadCsv(name,rows){var txt='﻿'+rows.map(function(r){return r.map(function(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}).join(';')}).join('\r\n');var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
+function exportCobrancas(){var tx=taxasMes(),late=isLate(MES);var rows=[['Unidade','Responsável','Taxa','Água','Gás'].concat(tx.map(function(t){return t.nome})).concat(['Aluguel','Total a pagar','Situação'])];S.unidades.forEach(function(u){var c=cobranca(u),p=paid(u);rows.push([uLabel(u),u.dono||u.morador,csvNum(c.taxa),csvNum(c.agua),csvNum(c.gas)].concat(tx.map(function(t){return csvNum(taxaValor(t,u,MES))})).concat([csvNum(c.aluguel),csvNum(c.total),p?'Pago':late?'Em atraso':'A vencer']))});downloadCsv('cobrancas-'+MES+'.csv',rows)}
+function exportDespesas(){var rows=[['Data','Descrição','Categoria','Valor']];despMes().slice().sort(function(a,b){return a.data.localeCompare(b.data)}).forEach(function(x){rows.push([fmtD(x.data),x.desc,x.cat,csvNum(x.valor)])});rows.push(['','','Total',csvNum(totalDespesas())]);downloadCsv('despesas-'+MES+'.csv',rows)}
+function printReport(){var w=window.open('','_blank');if(!w){flash('Libere os pop-ups do navegador para imprimir o relatório.');return}
+  var arrec=totalArrecadado(),esp=totalEsperado(),desp=totalDespesas(),late=isLate(MES);
+  var rows=S.unidades.map(function(u){var c=cobranca(u),p=paid(u);return '<tr><td>'+esc(uLabel(u))+'</td><td>'+esc(u.dono||u.morador)+'</td><td class="r">'+brl(c.total)+'</td><td>'+(p?'Pago':late?'Em atraso':'A vencer')+'</td></tr>'}).join('');
+  var dr=despMes().slice().sort(function(a,b){return a.data.localeCompare(b.data)}).map(function(x){return '<tr><td>'+fmtD(x.data)+'</td><td>'+esc(x.desc)+'</td><td>'+esc(x.cat)+'</td><td class="r">'+brl(x.valor)+'</td></tr>'}).join('');
+  var abertas=S.unidades.filter(function(u){return !paid(u)});
+  w.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Prestação de contas '+esc(MES_LABEL)+'</title><style>body{font:13px Arial,sans-serif;color:#111;margin:28px}h1{font-size:20px;margin:0}h2{font-size:15px;margin:22px 0 6px}p{margin:2px 0;color:#444}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:5px 6px;text-align:left}th{background:#f2f2f2}.r{text-align:right}.sum{display:flex;gap:24px;margin:14px 0}.sum div{border:1px solid #ccc;border-radius:6px;padding:8px 14px}.sum b{display:block;font-size:16px}</style></head><body><h1>Prestação de contas · '+esc(MES_LABEL)+'</h1><p>'+esc(COND)+'</p><div class="sum"><div>Arrecadado<b>'+brl(arrec)+'</b></div><div>Esperado<b>'+brl(esp)+'</b></div><div>Em aberto<b>'+brl(esp-arrec)+'</b></div><div>Despesas<b>'+brl(desp)+'</b></div><div>Saldo do mês<b>'+brl(arrec-desp)+'</b></div></div><h2>Cobranças por unidade ('+abertas.length+' em aberto)</h2><table><thead><tr><th>Unidade</th><th>Responsável</th><th class="r">Total</th><th>Situação</th></tr></thead><tbody>'+rows+'</tbody></table><h2>Despesas do mês</h2><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th class="r">Valor</th></tr></thead><tbody>'+(dr||'<tr><td colspan="4">Nenhuma despesa lançada.</td></tr>')+'</tbody></table><p style="margin-top:18px">Gerado em '+new Date().toLocaleString('pt-BR')+'</p></body></html>');
+  w.document.close();w.focus();setTimeout(function(){w.print()},300)}
 function vFin(){
-  var cob=S.unidades.map(function(u){var p=paid(u),c=cobranca(u);return '<tr><td class="num"><b>'+uLabel(u)+'</b></td><td>'+esc(u.dono)+'</td><td class="num">'+brl(c.taxa)+'</td><td class="num">'+brl(c.agua)+'</td><td class="num">'+brl(c.gas)+'</td>'+tdTaxas(u)+'<td class="num">'+(c.aluguel?brl(c.aluguel):'—')+'</td><td class="num"><b>'+brl(c.total)+'</b></td><td><span class="pill '+(p?'ok':MES>'2026-10'?'warn':'bad')+'">'+(p?'Pago':MES>'2026-10'?'A vencer':'Em atraso')+'</span></td><td><div class="row-actions">'+
-    (p?'<button class="btn sm ghost" data-unpay="'+u.id+'">Estornar</button>':'<button class="btn sm" data-pay="'+u.id+'">Marcar como pago</button><button class="btn sm ghost" data-copy="'+u.id+'">Copiar cobrança</button>')+'</div></td></tr>'}).join('');
+  var late=isLate(MES);
+  var cob=finList().map(function(u){var p=paid(u),c=cobranca(u);return '<tr><td class="num"><b>'+esc(uLabel(u))+'</b></td><td>'+esc(u.dono)+'</td><td class="num">'+brl(c.taxa)+'</td><td class="num">'+brl(c.agua)+'</td><td class="num">'+brl(c.gas)+'</td>'+tdTaxas(u)+'<td class="num">'+(c.aluguel?brl(c.aluguel):'—')+'</td><td class="num"><b>'+brl(c.total)+'</b></td><td><span class="pill '+(p?'ok':late?'bad':'warn')+'">'+(p?'Pago':late?'Em atraso':'A vencer')+'</span></td><td><div class="row-actions">'+
+    (p?'<button class="btn sm ghost" data-unpay="'+u.id+'">Estornar</button>':'<button class="btn sm" data-pay="'+u.id+'">Marcar como pago</button><button class="btn sm ghost" data-copy="'+u.id+'">Copiar cobrança</button>'+(waCobranca(u)?'<a class="btn sm wa" target="_blank" rel="noopener noreferrer" href="'+waCobranca(u)+'">WhatsApp</a>':''))+'</div></td></tr>'}).join('');
   var dsp=despMes().slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(d){return '<tr><td class="num">'+fmtD(d.data)+'</td><td>'+esc(d.desc)+'</td><td><span class="pill mute">'+esc(d.cat)+'</span></td><td class="num">'+brl(d.valor)+'</td><td><button class="btn sm danger" data-del-desp="'+d.id+'">Excluir</button></td></tr>'}).join('');
   var tabs=[['cobrancas','Cobranças do mês'],['despesas','Despesas do condomínio'],['meios','Meios de pagamento']];
   var tabBar='<div class="subtabs" role="tablist" aria-label="Seções do financeiro">'+tabs.map(function(t){return '<button type="button" role="tab" data-ftab="'+t[0]+'" aria-selected="'+(t[0]===financeTab)+'">'+t[1]+'</button>'}).join('')+'</div>';
   var cobrancas='<div class="panel"><h3>Cobranças automáticas</h3><p class="note">O sistema calcula taxa padrão, água, gás, taxas adicionais vigentes e aluguel quando configurado. Recalcular é seguro: lançamentos pagos são preservados.</p><button class="btn" data-generate-bills>Gerar/recalcular cobranças de '+esc(MES_LABEL)+'</button></div>'+
-  '<div class="panel"><h3>Cobranças de '+esc(MES_LABEL)+'</h3><p class="note"><label for="c-alu-fin">Aluguel na cobrança: </label><select id="c-alu-fin" style="width:auto"><option value="nao'+(!S.config.cobrarAluguel?'" selected':'"')+'>Repasse ao proprietário (fora do total)</option><option value="sim'+(S.config.cobrarAluguel?'" selected':'"')+'>Somar ao total a pagar</option></select></p><div class="tablewrap"><table><thead><tr><th>Unidade</th><th>Responsável</th><th>Taxa</th><th>Água</th><th>Gás</th>'+thTaxas()+'<th>Aluguel</th><th>Total a pagar</th><th>Situação</th><th></th></tr></thead><tbody>'+cob+'</tbody></table></div></div>';
+  '<div class="panel"><h3>Cobranças de '+esc(MES_LABEL)+'</h3>'+finToolbar()+'<p class="note"><label for="c-alu-fin">Aluguel na cobrança: </label><select id="c-alu-fin" style="width:auto"><option value="nao'+(!S.config.cobrarAluguel?'" selected':'"')+'>Repasse ao proprietário (fora do total)</option><option value="sim'+(S.config.cobrarAluguel?'" selected':'"')+'>Somar ao total a pagar</option></select></p><div class="tablewrap"><table><thead><tr><th>Unidade</th><th>Responsável</th><th>Taxa</th><th>Água</th><th>Gás</th>'+thTaxas()+'<th>Aluguel</th><th>Total a pagar</th><th>Situação</th><th></th></tr></thead><tbody>'+(cob||'<tr><td colspan="12" class="empty">Nenhuma unidade encontrada.</td></tr>')+'</tbody></table></div></div>';
   var despesas='<div class="panel"><h3>Lançar despesa</h3><form class="f" id="f-desp">'+
    '<label>Descrição<input id="d-desc" required></label>'+
    '<label>Categoria<select id="d-cat"><option>Pessoal</option><option>Consumo</option><option>Manutenção</option><option>Serviços</option><option>Reserva</option></select></label>'+
    '<label>Valor (R$)<input id="d-valor" type="number" min="0.01" step="0.01" required></label>'+
    '<label>Data<input id="d-data" type="date" required value="'+MES+'-15"></label>'+
    '<button class="btn" type="submit">Lançar despesa</button></form></div>'+
-  '<div class="panel"><h3>Despesas do condomínio · '+esc(MES_LABEL)+'</h3><div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>'+dsp+'</tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td class="num"><b>'+brl(totalDespesas())+'</b></td><td></td></tr></tfoot></table></div></div>';
+  '<div class="panel"><h3>Despesas do condomínio · '+esc(MES_LABEL)+'</h3><div class="toolbar"><button class="btn sm ghost" type="button" data-export-desp>Exportar CSV</button></div><div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>'+dsp+'</tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td class="num"><b>'+brl(totalDespesas())+'</b></td><td></td></tr></tfoot></table></div></div>';
   return head('Financeiro',MES_LABEL+' · vencimento no dia '+Number(S.config.vencimentoDia||10))+tabBar+(financeTab==='despesas'?despesas:financeTab==='meios'?vPag(true):cobrancas);
 }
 
@@ -433,7 +479,7 @@ function vTaxas(){
    '<label>A partir de<select id="t-ini">'+mo(MES)+'</select></label>'+
    '<label>Até<select id="t-fim"><option value="">Sem data final</option>'+mo('')+'</select></label>'+
    '<div class="wide"><span style="font-size:12px;color:var(--muted)">Apartamentos (vale só para "Apenas os marcados")</span><div class="checks">'+
-    S.unidades.map(function(u){return '<label class="chk"><input type="checkbox" id="tu-'+u.id+'">'+uLabel(u)+'</label>'}).join('')+'</div></div>'+
+    S.unidades.map(function(u){return '<label class="chk"><input type="checkbox" id="tu-'+u.id+'">'+esc(uLabel(u))+'</label>'}).join('')+'</div></div>'+
    '<button class="btn" type="submit">Cadastrar taxa</button></form>'+
   '<p class="note">Total de taxas adicionais em '+MES_LABEL+': <b class="num">'+brl(somaMes)+'</b>. Cada taxa entra no total a pagar de cada apartamento na aba Financeiro.</p>'+
   '<div class="tablewrap"><table><thead><tr><th>Taxa</th><th>Valor</th><th>Cobrada de</th><th>Em '+mesCurto(MES)+'</th><th>Vigência</th><th>Situação</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="empty">Nenhuma taxa adicional cadastrada.</td></tr>')+'</tbody></table></div></div>';
@@ -487,7 +533,7 @@ function leitTable(k,form,pa,pb,nomeU){
   var rows='',totV=0,totM=0;
   S.unidades.forEach(function(u){
     var r=getRead(u,k,MES),cb=cobranca(u),val=k==='agua'?cb.agua:cb.gas;totV+=val;totM+=lei(u,k);
-    rows+='<tr><td class="num"><b>'+uLabel(u)+'</b><br><small style="color:var(--muted)">'+u.situacao+'</small></td>'+
+    rows+='<tr><td class="num"><b>'+esc(uLabel(u))+'</b><br><small style="color:var(--muted)">'+u.situacao+'</small></td>'+
       rin(form,pa,u,r[0],nomeU+' anterior',r[3])+rin(form,pb,u,r[1],nomeU+' atual')+
       '<td class="num">'+lei(u,k).toFixed(3)+' m³</td><td class="num">'+brl(val)+'</td></tr>'});
   return '<div class="tablewrap"><table><thead><tr><th>Unidade</th><th>Leitura anterior</th><th>Leitura atual</th><th>Consumo</th><th>Valor a cobrar</th></tr></thead><tbody>'+rows+
@@ -514,7 +560,7 @@ function vLeitGas(){
 function histTable(k){
   var ms=MESES.filter(function(m){return m<=MES}).slice(-6),nome=k==='gas'?'gás':'água';
   var hh=ms.map(function(m){return '<th>'+mesCurto(m)+'</th>'}).join('');
-  var hr=S.unidades.map(function(u){return '<tr><td class="num"><b>'+uLabel(u)+'</b></td>'+ms.map(function(m){var r=getRead(u,k,m);return '<td class="num">'+(r[2]?leiM(u,k,m).toFixed(1):'—')+'</td>'}).join('')+'</tr>'}).join('');
+  var hr=S.unidades.map(function(u){return '<tr><td class="num"><b>'+esc(uLabel(u))+'</b></td>'+ms.map(function(m){var r=getRead(u,k,m);return '<td class="num">'+(r[2]?leiM(u,k,m).toFixed(1):'—')+'</td>'}).join('')+'</tr>'}).join('');
   var soma=function(m){var t=0;S.unidades.forEach(function(u){t+=leiM(u,k,m)});return t};
   var tm=ms.map(function(m){return '<td class="num"><b>'+soma(m).toFixed(1)+'</b></td>'}).join('');
   var tv=ms.map(function(m){return '<td class="num"><b>'+brl(k==='gas'?r2(soma(m)*tarifaDe(m)):contaAguaDe(m))+'</b></td>'}).join('');
@@ -633,18 +679,18 @@ function vTenantPayment(){
   var rows='';
   if(resident){rows=own.items.length?own.items.map(function(item){return tr(esc(item.descricao),brl(item.valor))}).join(''):tr('Cobrança do mês','Ainda não lançada');if(own.items.length)rows+=tr('Total a pagar',brl(c.total),'tot')}
   else{rows=tr('Taxa condominial',brl(c.taxa));c.extras.forEach(function(e){rows+=tr(esc(e.nome),brl(e.valor))});if(c.extras.length>1)rows+=tr('<i>Soma das taxas adicionais</i>','<i>'+brl(c.extrasTotal)+'</i>');rows+=tr('Água ('+lei(u,'agua').toFixed(1)+' m³)',brl(c.agua))+tr('Gás ('+lei(u,'gas').toFixed(1)+' m³)',brl(c.gas));if(c.aluguel)rows+=tr('Aluguel'+(S.config.cobrarAluguel?'':' (pago ao proprietário)'),brl(c.aluguel));rows+=tr(S.config.cobrarAluguel&&c.aluguel?'Total a pagar (com aluguel)':'Total a pagar ao condomínio',brl(c.total),'tot');if(c.aluguel&&!S.config.cobrarAluguel)rows+=tr('Total com aluguel',brl(r2(c.total+c.aluguel)),'tot')}
-  var status=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
+  var status=p?'<span class="pill ok">Pago</span>':(lateFor()?'<span class="pill bad">Em atraso</span>':'<span class="pill warn">A vencer</span>');
   return head('Pagamentos',esc(MES_LABEL)+' · Unidade '+esc(uLabel(u)))+'<div class="panel"><div class="item"><div><b>Situação da cobrança</b><p>Total deste mês: <strong class="num">'+brl(c.total)+'</strong></p></div>'+(own&&!own.items.length?'<span class="pill mute">Sem lançamento</span>':status)+'</div><h3>Detalhamento</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+pagarHtml(u,c,p);
 }
 
 function vMinha(){
   var u=unitByLabel(MY)||S.unidades[0],ul=uLabel(u),resident=role==='morador',own=resident?cobrancaMorador(MES):null;
   var p=resident?own.paid:paid(u),c=resident?{total:own.total}:cobranca(u),enc=S.encomendas.filter(function(e){return e.unidade===ul&&!e.retirada}).length,calls=S.chamados.filter(function(ch){return ch.unidade===ul&&ch.status!=='Resolvido'}).length;
-  var st=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
-  var unitDisplay=role==='morador'?'<div><small>Minha unidade</small><b>'+esc(ul)+'</b></div>':'<div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div>';
+  var st=p?'<span class="pill ok">Pago</span>':(lateFor()?'<span class="pill bad">Em atraso</span>':'<span class="pill warn">A vencer</span>');
+  var unitDisplay=role==='morador'?'<div><small>Minha unidade</small><b>'+esc(ul)+'</b></div>':'<div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></div>';
   var news=S.comunicados.slice().sort(function(a,b){return b.data.localeCompare(a.data)})[0];
   var contract=resident?(u.contractPath?'<div class="panel resident-contract"><div><h3>Contrato de locação</h3><p class="note">'+esc(u.contractName||'Contrato anexado pelo síndico')+'</p></div><button class="btn" type="button" data-contract="'+esc(u.contractPath)+'">Abrir contrato</button></div>':'<div class="panel"><h3>Contrato de locação</h3><p class="empty">O síndico ainda não anexou um contrato para esta locação.</p></div>'):'';
-  return head('Minha unidade',esc(COND)+' · '+ul+' · '+MES_LABEL)+
+  return head('Minha unidade',esc(COND)+' · '+esc(ul)+' · '+MES_LABEL)+
   '<div class="panel"><div class="unit-card">'+unitDisplay+'<div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Moradores</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
   contract+'<div class="grid resident-shortcuts"><button class="panel resident-shortcut" type="button" data-nav="pagamentos"><small>Pagamento do mês</small><b>'+brl(c.total)+'</b><span>'+ (p?'Cobrança paga':own&&!own.items.length?'Cobrança ainda não lançada':'Ver cobrança e pagar')+'</span></button><button class="panel resident-shortcut" type="button" data-nav="chamados"><small>Meus chamados</small><b>'+calls+'</b><span>Solicitações em andamento</span></button><button class="panel resident-shortcut" type="button" data-nav="encomendas"><small>Encomendas</small><b>'+enc+'</b><span>Aguardando retirada</span></button></div>'+
   '<div class="panel resident-news"><div><small>Comunicado recente</small><b>'+(news?esc(news.titulo):'Nenhum comunicado novo')+'</b><p>'+(news?esc(news.texto):'Os avisos do condomínio aparecerão aqui.')+'</p></div><button class="btn ghost sm" type="button" data-nav="comunicacao">Ver avisos</button></div>';
@@ -654,17 +700,21 @@ function render(){
   if(!supabase){renderAuth();return}
   if(!DB_READY){renderAuth();return}
   document.body.classList.toggle('unit-modal-open',!!activeUnitId);
-  var a=document.activeElement, id=a&&a.id;
+  if(RECOVERY){renderRecovery('');return}
+  var a=document.activeElement, id=a&&a.id, selS=null, selE=null;
+  if(id&&id.indexOf('q-')===0&&a.selectionStart!=null){selS=a.selectionStart;selE=a.selectionEnd}
   setShell(true);
   document.getElementById('app').classList.toggle('resident-app',role==='morador');
   document.getElementById('app').innerHTML=shell();
-  if(id==='mes'){var el=document.getElementById(id);if(el)el.focus()}
+  if(id==='mes'||(id&&id.indexOf('q-')===0)){var el=document.getElementById(id);if(el){el.focus();if(selS!=null&&el.setSelectionRange){try{el.setSelectionRange(selS,selE)}catch(x){}}}}
 }
 
 function openUnitModal(id){activeUnitId=id;editingTenant=false;render();var close=document.querySelector('[data-unit-modal-close]');if(close)close.focus()}
 function closeUnitModal(){var id=activeUnitId;activeUnitId='';editingTenant=false;render();var card=Array.from(document.querySelectorAll('[data-open-unit]')).find(function(el){return el.dataset.openUnit===id});if(card)card.focus()}
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&activeUnitId){e.preventDefault();closeUnitModal();return}var card=e.target.closest('[data-open-unit][role="button"]');if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openUnitModal(card.dataset.openUnit)}});
+document.addEventListener('input',function(e){var t=e.target;if(t.id==='q-fin'){finQ=t.value;render()}else if(t.id==='q-unit'){unitQ=t.value;render()}});
 document.addEventListener('change',function(e){
+  if(e.target.id==='q-fin-st'){finSt=e.target.value;render()}
   if(e.target.id==='mes'){setMes(e.target.value);render()}
   if(e.target.id==='my-unit'&&role!=='morador'){MY=e.target.value;render()}
   if(e.target.id==='c-alu-fin'){S.config.cobrarAluguel=e.target.value==='sim';save();render()}
@@ -689,6 +739,14 @@ document.addEventListener('click',async function(e){
     var deleted=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('unidade_id',leaving.id).eq('tipo','inquilino');if(deleted.error){flash('Não foi possível registrar a desocupação: '+deleted.error.message);return}
     leaving.morador='—';leaving.tel='—';leaving.situacao='Vago';leaving.aluguel=0;leaving.residentIds=[];leaving.residentEmails=[];leaving.residentUsers=[];leaving.contractPath='';leaving.contractName='';leaving.contractStart=null;leaving.contractEnd=null;leaving.pago={};activeUnitId=leaving.id;editingTenant=false;save();await saveQueue;toast('Unidade '+uLabel(leaving)+' marcada como vaga e acessos revogados');return
   }
+  if(e.target.closest('[data-forgot]')){
+    var forgotEmail=((document.getElementById('a-email')||{}).value||'').trim();
+    if(!forgotEmail){authNotice='Digite seu e-mail no campo abaixo e clique em "Esqueci minha senha" de novo.';renderAuth();return}
+    authEmail=forgotEmail;
+    var resetResult=await supabase.auth.resetPasswordForEmail(forgotEmail,{redirectTo:location.origin+location.pathname});
+    authNotice=resetResult.error?'Não foi possível enviar o e-mail: '+resetResult.error.message:'Se este e-mail tiver cadastro, enviamos um link para criar uma nova senha.';
+    renderAuth();return
+  }
   var authButton=e.target.closest('[data-auth-mode]');
   if(authButton){authMode=authMode==='register'?'login':'register';authNotice='';renderAuth();return}
   if(e.target.closest('[data-signout]')){if(portariaCheckTimer)clearInterval(portariaCheckTimer);DB_READY=false;USER=null;CONDO_ID='';supabase.auth.signOut().then(function(){renderAuth()});return}
@@ -699,29 +757,39 @@ document.addEventListener('click',async function(e){
   var d=t.dataset, f;
   if(d.generateBills){renderLoading('Gerando cobranças do mês…');var generated=await supabase.rpc('gerar_cobrancas_condominio',{_competencia:MES+'-01'});if(generated.error){flash('Falha ao gerar cobranças: '+generated.error.message);render();return}await loadWorkspace({user:USER});flash('Cobranças do mês recalculadas e salvas');return}
   if(d.contract){var signed=await supabase.storage.from('contratos-locacao').createSignedUrl(d.contract,60);if(signed.error){flash('Não foi possível abrir o contrato: '+signed.error.message);return}window.open(signed.data.signedUrl,'_blank','noopener');return}
-  if(d.nav){view=d.nav;render();return}
+  if(d.exportCob){exportCobrancas();return}
+  if(d.exportDesp){exportDespesas();return}
+  if(d.printReport){printReport();return}
+  if(d.themeToggle){THEME=THEME==='auto'?'dark':THEME==='dark'?'light':'auto';try{localStorage.setItem('condogestor-theme',THEME)}catch(x){}applyTheme();render();return}
+  if(d.nav){if(d.ftabSet)financeTab=d.ftabSet;view=d.nav;render();return}
   if(d.pay){f=S.unidades.filter(function(u){return u.id===d.pay})[0];f.pago[MES]=true;save();await saveQueue;var paidResult=await Promise.all([supabase.from('cobrancas_unidade').update({status:'pago'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01'),supabase.from('cobrancas_taxas_adicionais').update({status:'pago'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01')]);var paidError=paidResult.find(function(x){return x.error});if(paidError){flash('Não foi possível confirmar a baixa: '+paidError.error.message);return}toast('Pagamento registrado para '+uLabel(f));return}
-  if(d.unpay){f=S.unidades.filter(function(u){return u.id===d.unpay})[0];delete f.pago[MES];save();await saveQueue;var unpayResult=await Promise.all([supabase.from('cobrancas_unidade').update({status:'pendente'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01'),supabase.from('cobrancas_taxas_adicionais').update({status:'pendente'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01')]);var unpayError=unpayResult.find(function(x){return x.error});if(unpayError){flash('Não foi possível estornar: '+unpayError.error.message);return}toast('Pagamento estornado');return}
+  if(d.unpay){f=S.unidades.filter(function(u){return u.id===d.unpay})[0];if(!window.confirm('Estornar o pagamento de '+uLabel(f)+'?'))return;delete f.pago[MES];save();await saveQueue;var unpayResult=await Promise.all([supabase.from('cobrancas_unidade').update({status:'pendente'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01'),supabase.from('cobrancas_taxas_adicionais').update({status:'pendente'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.id).eq('competencia',MES+'-01')]);var unpayError=unpayResult.find(function(x){return x.error});if(unpayError){flash('Não foi possível estornar: '+unpayError.error.message);return}toast('Pagamento estornado');return}
   if(d.copy){f=S.unidades.filter(function(u){return u.id===d.copy})[0];
-    var c=cobranca(f);var txt='Olá, '+f.dono+'. Cobrança de '+MES_LABEL+' da unidade '+uLabel(f)+': taxa '+brl(c.taxa)+', água '+brl(c.agua)+', gás '+brl(c.gas)+c.extras.map(function(e){return ', '+e.nome.toLowerCase()+' '+brl(e.valor)}).join('')+(S.config.cobrarAluguel&&c.aluguel?', aluguel '+brl(c.aluguel):'')+'. Total '+brl(c.total)+', vencido em 10/10. Pedimos a regularização. Administração do '+COND+'.';
+    var txt=cobrancaTexto(f);
     try{navigator.clipboard.writeText(txt).then(function(){toast('Mensagem de cobrança copiada')},function(){toast(txt)})}catch(x){toast(txt)}return}
-  if(d.delUnit){var removed=S.unidades.find(function(u){return u.id===d.delUnit});var removedLabel=removed?uLabel(removed):'';var linkedToDelete=await supabase.from('moradores').select('user_id').eq('condominio_id',CONDO_ID).eq('unidade_id',d.delUnit).eq('tipo','inquilino');if(linkedToDelete.error){flash('Não foi possível verificar os acessos dos moradores: '+linkedToDelete.error.message);return}for(var linkedRow of linkedToDelete.data||[]){if(linkedRow.user_id){var revokeDelete=await supabase.rpc('revogar_acesso',{_user_id:linkedRow.user_id});if(revokeDelete.error){flash('Não foi possível revogar o acesso do morador: '+revokeDelete.error.message);return}}}var delUnit=await supabase.from('unidades').delete().eq('condominio_id',CONDO_ID).eq('id',d.delUnit);if(delUnit.error){flash('Não foi possível remover a unidade: '+delUnit.error.message);return}S.unidades=S.unidades.filter(function(u){return u.id!==d.delUnit});S.prestadores=S.prestadores.filter(function(x){return x.unidade!==removedLabel});S.veiculos=S.veiculos.filter(function(x){return x.unidade!==removedLabel});S.visitantes=S.visitantes.filter(function(x){return x.unidade!==removedLabel});S.encomendas=S.encomendas.filter(function(x){return x.unidade!==removedLabel});S.chamados=S.chamados.filter(function(x){return x.unidade!==removedLabel});save();toast('Unidade removida e acessos revogados');return}
-  if(d.delDesp){var dd=await supabase.from('despesas_condominio').delete().eq('condominio_id',CONDO_ID).eq('id',d.delDesp);if(dd.error){flash(dd.error.message);return}S.despesas=S.despesas.filter(function(x){return x.id!==d.delDesp});save();toast('Despesa excluída');return}
-  if(d.delNot){var dn=await supabase.from('comunicados').delete().eq('condominio_id',CONDO_ID).eq('id',d.delNot);if(dn.error){flash(dn.error.message);return}S.comunicados=S.comunicados.filter(function(x){return x.id!==d.delNot});save();toast('Comunicado excluído');return}
+  if(d.delUnit){var removed=S.unidades.find(function(u){return u.id===d.delUnit});var removedLabel=removed?uLabel(removed):'';if(!window.confirm('Remover o apartamento '+removedLabel+'?\n\nIsso apaga também moradores, cobranças e o histórico desta unidade, e revoga os acessos. A ação não pode ser desfeita.'))return;var linkedToDelete=await supabase.from('moradores').select('user_id').eq('condominio_id',CONDO_ID).eq('unidade_id',d.delUnit).eq('tipo','inquilino');if(linkedToDelete.error){flash('Não foi possível verificar os acessos dos moradores: '+linkedToDelete.error.message);return}for(var linkedRow of linkedToDelete.data||[]){if(linkedRow.user_id){var revokeDelete=await supabase.rpc('revogar_acesso',{_user_id:linkedRow.user_id});if(revokeDelete.error){flash('Não foi possível revogar o acesso do morador: '+revokeDelete.error.message);return}}}var delUnit=await supabase.from('unidades').delete().eq('condominio_id',CONDO_ID).eq('id',d.delUnit);if(delUnit.error){flash('Não foi possível remover a unidade: '+delUnit.error.message);return}S.unidades=S.unidades.filter(function(u){return u.id!==d.delUnit});S.prestadores=S.prestadores.filter(function(x){return x.unidade!==removedLabel});S.veiculos=S.veiculos.filter(function(x){return x.unidade!==removedLabel});S.visitantes=S.visitantes.filter(function(x){return x.unidade!==removedLabel});S.encomendas=S.encomendas.filter(function(x){return x.unidade!==removedLabel});S.chamados=S.chamados.filter(function(x){return x.unidade!==removedLabel});save();toast('Unidade removida e acessos revogados');return}
+  if(d.delDesp){if(!window.confirm('Excluir esta despesa?'))return;var dd=await supabase.from('despesas_condominio').delete().eq('condominio_id',CONDO_ID).eq('id',d.delDesp);if(dd.error){flash(dd.error.message);return}S.despesas=S.despesas.filter(function(x){return x.id!==d.delDesp});save();toast('Despesa excluída');return}
+  if(d.delNot){if(!window.confirm('Excluir este comunicado?'))return;var dn=await supabase.from('comunicados').delete().eq('condominio_id',CONDO_ID).eq('id',d.delNot);if(dn.error){flash(dn.error.message);return}S.comunicados=S.comunicados.filter(function(x){return x.id!==d.delNot});save();toast('Comunicado excluído');return}
   if(d.ltab){leitTab=d.ltab;render();return}
   if(d.ptab){portTab=d.ptab;render();return}
   if(d.pout){f=S.prestadores.filter(function(x){return x.id===d.pout})[0];f.saida=now();save();toast('Saída do prestador registrada');return}
   if(d.vout){f=S.veiculos.filter(function(x){return x.id===d.vout})[0];f.saida=now();save();toast('Saída do veículo registrada');return}
-  if(d.delVei){var dv=await supabase.from('veiculos_condominio').delete().eq('condominio_id',CONDO_ID).eq('id',d.delVei);if(dv.error){flash(dv.error.message);return}S.veiculos=S.veiculos.filter(function(x){return x.id!==d.delVei});save();toast('Veículo removido');return}
-  if(d.meioToggle){f=S.meios.filter(function(x){return x.id===d.meioToggle})[0];f.ativo=!f.ativo;save();toast(f.ativo?'Meio de pagamento ativado':'Meio de pagamento desativado');return}
-  if(d.delMeio){var dm=await supabase.from('meios_pagamento_condominio').delete().eq('condominio_id',CONDO_ID).eq('id',d.delMeio);if(dm.error){flash(dm.error.message);return}S.meios=S.meios.filter(function(x){return x.id!==d.delMeio});save();toast('Meio de pagamento excluído');return}
-  if(d.pagOk){f=S.pagamentos.filter(function(x){return x.id===d.pagOk})[0];var un=S.unidades.filter(function(x){return x.id===f.unidadeId})[0];if(un)un.pago[f.mes]=true;f.status='Confirmado';save();toast('Pagamento confirmado e fatura baixada');return}
-  if(d.pagNo){f=S.pagamentos.filter(function(x){return x.id===d.pagNo})[0];f.status='Recusado';save();toast('Pagamento recusado');return}
+  if(d.delVei){if(!window.confirm('Remover este veículo?'))return;var dv=await supabase.from('veiculos_condominio').delete().eq('condominio_id',CONDO_ID).eq('id',d.delVei);if(dv.error){flash(dv.error.message);return}S.veiculos=S.veiculos.filter(function(x){return x.id!==d.delVei});save();toast('Veículo removido');return}
+  if(d.pagOk){f=S.pagamentos.filter(function(x){return x.id===d.pagOk})[0];if(!f)return;
+    var okPay=await supabase.from('pagamentos_morador').update({status:'confirmado',conferido_por:USER.id,conferido_em:new Date().toISOString()}).eq('condominio_id',CONDO_ID).eq('id',f.id);
+    if(okPay.error){flash('Não foi possível confirmar o pagamento: '+okPay.error.message);return}
+    var okBills=await Promise.all([supabase.from('cobrancas_unidade').update({status:'pago'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.unidadeId).eq('competencia',f.mes+'-01'),supabase.from('cobrancas_taxas_adicionais').update({status:'pago'}).eq('condominio_id',CONDO_ID).eq('unidade_id',f.unidadeId).eq('competencia',f.mes+'-01')]);
+    var okBillErr=okBills.find(function(x){return x.error});if(okBillErr)flash('Pagamento confirmado, mas a baixa da fatura falhou: '+okBillErr.error.message);
+    var un=S.unidades.filter(function(x){return x.id===f.unidadeId})[0];if(un)un.pago[f.mes]=true;f.status='Confirmado';toast('Pagamento confirmado e fatura baixada');return}
+  if(d.pagNo){f=S.pagamentos.filter(function(x){return x.id===d.pagNo})[0];if(!f)return;if(!window.confirm('Recusar este pagamento informado pelo morador?'))return;
+    var noPay=await supabase.from('pagamentos_morador').update({status:'recusado',conferido_por:USER.id,conferido_em:new Date().toISOString()}).eq('condominio_id',CONDO_ID).eq('id',f.id);
+    if(noPay.error){flash('Não foi possível recusar o pagamento: '+noPay.error.message);return}
+    f.status='Recusado';toast('Pagamento recusado');return}
   if(d.copyKey){f=S.meios.filter(function(x){return x.id===d.copyKey})[0];var k=(f.dados&&f.dados.chave)||'';try{navigator.clipboard.writeText(k).then(function(){flash('Chave PIX copiada')},function(){flash(k)})}catch(x){flash(k)}return}
   if(d.informar){f=S.meios.filter(function(x){return x.id===d.informar})[0];await registrarPag(f,'Aguardando conferência');if(role==='morador')toast('Pagamento informado. Aguarde a confirmação do síndico');return}
   if(d.mp){flash('A integração real com o Mercado Pago ainda não está conectada. Nenhum pagamento foi processado.');return}
   if(d.endTaxa){f=S.taxas.filter(function(x){return x.id===d.endTaxa})[0];f.fim=MES;save();toast('Taxa encerrada após '+MES_LABEL);return}
-  if(d.delTaxa){var dt=await supabase.from('taxas_adicionais').delete().eq('condominio_id',CONDO_ID).eq('id',d.delTaxa);if(dt.error){flash('A taxa não pode ser removida enquanto houver cobranças vinculadas: '+dt.error.message);return}S.taxas=S.taxas.filter(function(x){return x.id!==d.delTaxa});save();toast('Taxa excluída');return}
+  if(d.delTaxa){if(!window.confirm('Excluir esta taxa adicional?'))return;var dt=await supabase.from('taxas_adicionais').delete().eq('condominio_id',CONDO_ID).eq('id',d.delTaxa);if(dt.error){flash('A taxa não pode ser removida enquanto houver cobranças vinculadas: '+dt.error.message);return}S.taxas=S.taxas.filter(function(x){return x.id!==d.delTaxa});save();toast('Taxa excluída');return}
   if(d.out){f=S.visitantes.filter(function(x){return x.id===d.out})[0];f.saida=now();save();toast('Saída registrada');return}
   if(d.pick){f=S.encomendas.filter(function(x){return x.id===d.pick})[0];f.retirada=now();save();toast('Encomenda entregue');return}
   if(d.next){f=S.chamados.filter(function(x){return x.id===d.next})[0];f.status=f.status==='Aberto'?'Em andamento':'Resolvido';save();toast('Chamado atualizado');return}
@@ -740,6 +808,19 @@ document.addEventListener('submit',async function(e){
       await supabase.auth.updateUser({data:{sercon_convite_token:null}});clearInviteTokenFromUrl();pendingInviteToken='';
       var active=await supabase.auth.getSession();if(active.error)throw active.error;await loadWorkspace(active.data.session);
     }catch(err){renderResidentPassword(err.message||'Não foi possível ativar o acesso.')}
+    return;
+  }
+  if(id==='f-recovery'){
+    var rp=v('recovery-new-password'),rc=v('recovery-confirm-password');
+    if(rp.length<8){renderRecovery('A senha deve ter pelo menos 8 caracteres.');return}
+    if(rp!==rc){renderRecovery('As senhas não são iguais.');return}
+    renderLoading('Salvando nova senha…');
+    try{
+      var upd=await supabase.auth.updateUser({password:rp});if(upd.error)throw upd.error;
+      RECOVERY=false;history.replaceState({},'',location.pathname+location.search);
+      var sess=await supabase.auth.getSession();if(sess.error||!sess.data.session)throw (sess.error||new Error('Sessão não encontrada. Peça um novo link.'));
+      await enterWorkspace(sess.data.session);
+    }catch(err){renderRecovery(err.message||'Não foi possível salvar a nova senha.')}
     return;
   }
   if(id==='f-auth'){
@@ -811,7 +892,7 @@ document.addEventListener('submit',async function(e){
     if(!names.length){flash('Informe ao menos um inquilino');return}
     var oldIds=unit.residentIds||[],oldEmails=unit.residentEmails||[],oldUsers=unit.residentUsers||[];
     var contractPath=isEditing?(unit.contractPath||''):'';
-    if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var path=CONDO_ID+'/'+unit.id+'/locacao-'+uid()+'/'+file.name,uploaded=await supabase.storage.from('contratos-locacao').upload(path,file,{upsert:false,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}
+    if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var path=CONDO_ID+'/'+unit.id+'/locacao-'+uid()+'/'+safeName(file.name),uploaded=await supabase.storage.from('contratos-locacao').upload(path,file,{upsert:false,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}
     for(var j=names.length;j<oldIds.length;j++){
       if(oldUsers[j]){var revoked=await supabase.rpc('revogar_acesso',{_user_id:oldUsers[j]});if(revoked.error){flash('Não foi possível revogar o acesso de '+(splitNames(unit.morador)[j]||'um morador')+': '+revoked.error.message);return}}
       var removed=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('id',oldIds[j]);if(removed.error){flash('Não foi possível remover o cadastro do morador: '+removed.error.message);return}
@@ -822,7 +903,7 @@ document.addEventListener('submit',async function(e){
     editingTenant=false;try{await saveQueue;await persistWorkspace()}catch(persistError){flash('Não foi possível salvar os dados do inquilino: '+(persistError.message||persistError));return}render();
     toast('Locação salva. O acesso ao aplicativo pode ser cadastrado na seção separada abaixo.');return
   }
-  if(id==='f-unit'){var dono=v('u-dono'),situacao=v('u-sit'),morador=v('u-morador')||(situacao==='Proprietário residente'?dono:''),phones=splitPhones(v('u-telefones'));var residentPhones=situacao==='Inquilino'?splitNames(morador).map(function(_,i){return phones[i]||''}):[];if(situacao==='Inquilino'&&!morador){flash('Informe ao menos um inquilino');return}var vagas=Array.from(new Set(v('u-vagas').split(',').map(function(x){return x.trim()}).filter(Boolean))),unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+file.name,file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}S.unidades.push({id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:residentPhones.find(function(phone){return phone})||v('u-tel')||'—',residentPhones:residentPhones,situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||'',parkingSpaces:vagas});renderLoading('Salvando unidade e moradores…');try{await saveQueue;await persistWorkspace()}catch(unitSaveError){render();flash('Não foi possível salvar a unidade e os moradores: '+(unitSaveError.message||unitSaveError));return}unitTab='apartamentos';activeBlock=v('u-bloco').toUpperCase();view='unidades';render();toast('Unidade cadastrada')}
+  if(id==='f-unit'){var dono=v('u-dono'),situacao=v('u-sit'),morador=v('u-morador')||(situacao==='Proprietário residente'?dono:''),phones=splitPhones(v('u-telefones'));var residentPhones=situacao==='Inquilino'?splitNames(morador).map(function(_,i){return phones[i]||''}):[];if(situacao==='Inquilino'&&!morador){flash('Informe ao menos um inquilino');return}var vagas=Array.from(new Set(v('u-vagas').split(',').map(function(x){return x.trim()}).filter(Boolean))),unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+safeName(file.name),file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}S.unidades.push({id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:residentPhones.find(function(phone){return phone})||v('u-tel')||'—',residentPhones:residentPhones,situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||'',parkingSpaces:vagas});renderLoading('Salvando unidade e moradores…');try{await saveQueue;await persistWorkspace()}catch(unitSaveError){render();flash('Não foi possível salvar a unidade e os moradores: '+(unitSaveError.message||unitSaveError));return}unitTab='apartamentos';activeBlock=v('u-bloco').toUpperCase();view='unidades';render();toast('Unidade cadastrada')}
   else if(id==='f-config'){S.config.taxaCondominio=parseFloat(v('cfg-taxa'))||0;S.config.vencimentoDia=parseInt(v('cfg-venc'),10)||10;S.unidades.forEach(function(u){u.taxa=S.config.taxaCondominio});save();toast('Taxa padrão salva e cobranças atualizadas')}
   else if(id==='f-agua'){var bad=saveReads('agua','aa-','ab-');if(bad){flash('A leitura atual da unidade '+bad+' não pode ser menor que a leitura anterior');return}S.config.contaMes[MES]=parseFloat(v('c-agua'))||0;S.config.tarifaAgua=parseFloat(v('c-agua-tarifa'))||0;S.config.modoAgua=v('c-modo');save();toast('Água salva e cobrança recalculada')}
   else if(id==='f-gas'){var bad2=saveReads('gas','ga-','gb-');if(bad2){flash('A leitura atual da unidade '+bad2+' não pode ser menor que a leitura anterior');return}S.config.tarifaMes[MES]=parseFloat(v('c-gas'))||0;save();toast('Gás salvo e cobrança recalculada')}
@@ -831,11 +912,6 @@ document.addEventListener('submit',async function(e){
     if(!/^[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}$/.test(pl)){flash('Placa inválida. Use ABC-1D23 ou ABC-1234');return}
     pl=pl.replace('-','');pl=pl.slice(0,3)+'-'+pl.slice(3);var tp2=v('w-tipo');
     S.veiculos.push({id:uid(),placa:pl,modelo:v('w-modelo'),cor:v('w-cor'),tipo:tp2,unidade:v('w-un'),vaga:v('w-vaga')||'—',entrada:tp2==='Morador'?'':now(),saida:''});save();toast('Veículo registrado')}
-  else if(id==='f-meio'){var tp=v('p-tipo'),dd={},ck=function(i){return document.getElementById(i).checked};
-    if(tp==='pix'){dd={tipoChave:v('p-tipochave'),chave:v('p-chave'),favorecido:v('p-fav')};if(!dd.chave){flash('Informe a chave PIX');return}}
-    if(tp==='transferencia'){dd={banco:v('p-banco'),agencia:v('p-ag'),conta:v('p-conta'),favorecido:v('p-fav')};if(!dd.conta){flash('Informe a conta');return}}
-    if(tp==='mercadopago'){dd={email:v('p-mpmail'),publicKey:v('p-mppk'),pix:ck('p-mp-pix'),cartao:ck('p-mp-cartao'),boleto:ck('p-mp-boleto')};if(!dd.email){flash('Informe o e-mail da conta Mercado Pago');return}}
-    S.meios.push({id:uid(),nome:v('p-nome'),tipo:tp,ativo:true,dados:dd,instrucoes:v('p-instr')});save();toast('Meio de pagamento cadastrado')}
   else if(id==='f-taxa'){
     var ap=v('t-aplica'),ini=v('t-ini'),fim=v('t-fim');
     var sel=S.unidades.filter(function(u){return document.getElementById('tu-'+u.id).checked}).map(function(u){return u.id});
@@ -848,14 +924,17 @@ document.addEventListener('submit',async function(e){
   else if(id==='f-not'){S.comunicados.push({id:uid(),titulo:v('n-tit'),texto:v('n-txt'),data:now().slice(0,10)});save();toast('Comunicado publicado')}
   else if(id==='f-ch'){var un=role==='morador'?MY:v('c-un');if(role==='morador'){var ticket=await supabase.from('chamados').insert({condominio_id:CONDO_ID,unidade_id:S.unidades[0].id,titulo:v('c-tit'),descricao:v('c-tit'),categoria:'outros',prioridade:'media',status:'aberto',aberto_por:USER.id}).select().single();if(ticket.error){flash('Não foi possível abrir o chamado: '+ticket.error.message);return}S.chamados.unshift({id:ticket.data.id,unidade:un,titulo:ticket.data.titulo,status:'Aberto',data:(ticket.data.criado_em||'').slice(0,10)});render();toast('Chamado aberto')}else{S.chamados.push({id:uid(),unidade:un,titulo:v('c-tit'),status:'Aberto',data:now().slice(0,10)});save();toast('Chamado aberto')}}
 });
+applyTheme();
 render();
 if(supabase){
   supabase.auth.getSession().then(function(result){
     if(result.error){authNotice=result.error.message;renderAuth();return}
+    if(RECOVERY){renderRecovery('');return}
     if(result.data.session){renderLoading('Carregando dados do condomínio…');enterWorkspace(result.data.session).catch(function(err){DB_READY=false;USER=null;authNotice=err.message||'Falha ao carregar o condomínio.';renderAuth()})}
     else{if(inviteTokenFromUrl())authNotice='Entre com o mesmo e-mail que recebeu o convite para ativar o acesso.';renderAuth()}
   });
   supabase.auth.onAuthStateChange(function(event){
+    if(event==='PASSWORD_RECOVERY'){RECOVERY=true;renderRecovery('');return}
     if(event==='SIGNED_OUT'){DB_READY=false;USER=null;CONDO_ID='';renderAuth()}
   });
 }

@@ -1,7 +1,10 @@
+Warning: truncated output (original token count: 30577)
+Total output lines: 843
+
 import { createClient } from "@supabase/supabase-js";
 
 (function(){
-var MES=new Date().toISOString().slice(0,7), MES_LABEL='', COND='', CONDO_ID='', USER=null, DB_READY=false, BLOCK_IDS={};
+var MES=new Date().toISOString().slice(0,7), MES_LABEL='', COND='', CONDO_ID='', USER=null, DB_READY=false, BLOCK_IDS={}, CURRENT_MORADOR=null, RESIDENT_INVITES={};
 var supabaseUrl=import.meta.env.VITE_SUPABASE_URL;
 var supabaseKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 var supabase=(supabaseUrl&&supabaseKey)?createClient(supabaseUrl,supabaseKey):null;
@@ -25,7 +28,7 @@ async function refreshPaymentConfig(){
   if(MP_CONFIG.method){var m=MP_CONFIG.method;S.meios=[{id:m.id,nome:m.nome,tipo:m.tipo,ativo:true,dados:m.dados_publicos||{},instrucoes:m.instrucoes||''}]}
   else S.meios=[];
 }
-function save(){if(DB_READY)saveQueue=saveQueue.catch(function(){}).then(function(){return role==='portaria'?persistPortariaWorkspace():persistWorkspace()}).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
+function save(){if(DB_READY&&role!=='morador')saveQueue=saveQueue.catch(function(){}).then(function(){return role==='portaria'?persistPortariaWorkspace():persistWorkspace()}).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
 
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas', unitTab='apartamentos', activeBlock='', activeUnitId='', editingTenant=false;
 var MY='A-302';
@@ -72,6 +75,7 @@ var tdTaxas=function(u){return taxasMes().map(function(t){var v=taxaValor(t,u,ME
 var cobranca=function(u){var alu=u.aluguel||0,t=Number(S.config.taxaCondominio||u.taxa||0),a=calcAgua(u),g=r2(lei(u,'gas')*tarifaDe(MES));
   var ex=extrasDe(u,MES),sx=r2(ex.reduce(function(s,e){return s+e.valor},0));
   return {taxa:t,agua:a,gas:g,extras:ex,extrasTotal:sx,aluguel:alu,total:r2(t+a+g+sx+(S.config.cobrarAluguel?alu:0))}};
+function cobrancaMorador(mes){var base=(S.residentCharges||[]).filter(function(x){return x.competencia===mes+'-01'}),extra=(S.residentExtraCharges||[]).filter(function(x){return x.competencia===mes+'-01'}),items=base.concat(extra).map(function(x){return {descricao:x.descricao||'Cobrança',valor:Number(x.valor||0),status:x.status||'pendente'}});return {items:items,total:r2(items.reduce(function(sum,x){return sum+x.valor},0)),paid:items.length>0&&items.every(function(x){return x.status==='pago'})}}
 var totalEsperado=function(){return S.unidades.reduce(function(a,u){return a+cobranca(u).total},0)};
 var totalArrecadado=function(){return S.unidades.reduce(function(a,u){return a+(paid(u)?cobranca(u).total:0)},0)};
 var totalDespesas=function(){return despMes().reduce(function(a,d){return a+d.valor},0)};
@@ -111,12 +115,31 @@ function renderAuth(){
   var app=document.getElementById('app');
   setShell(false);
   if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Sistema indisponível</h2><p class="note">O acesso ao banco de dados não está configurado neste ambiente. Configure as variáveis do Supabase para habilitar cadastro e login.</p></div></main>';return}
-  var reg=authMode==='register';
-  app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com seu e-mail e senha. Porteiros e vigilantes entram com o acesso enviado pelo síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
+  var reg=authMode==='register',hasInvite=!!inviteTokenFromUrl();
+  app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':(hasInvite?'Entre com o e-mail convidado para vincular seu acesso ao apartamento.':'Acesse com seu e-mail e senha. Porteiros, vigilantes e moradores entram com o acesso enviado pelo síndico.'))+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
   '<form class="f" id="f-auth">'+(reg?'<label>Seu nome<input id="a-nome" required autocomplete="name"></label><label>Nome do condomínio<input id="a-cond" required></label><label>CNPJ (opcional)<input id="a-cnpj" inputmode="numeric"></label><label class="wide">Endereço (opcional)<input id="a-endereco" autocomplete="street-address"></label><label>Telefone do condomínio<input id="a-telefone" type="tel"></label><label>Taxa de condomínio mensal por apartamento (R$)<input id="a-taxa" type="number" min="0" step="0.01" value="0" required><small>Esse valor será cobrado de cada apartamento ocupado.</small></label><label>Vencimento da cobrança (dia)<input id="a-venc" type="number" min="1" max="28" value="10" required></label><label>Água<select id="a-agua"><option value="rateio">Rateio da conta do condomínio</option><option value="individual">Medidor e cobrança individual</option></select></label><label>Tarifa água (R$/m³)<input id="a-agua-tarifa" type="number" min="0" step="0.0001" value="0"></label><label>Tarifa gás (R$/m³)<input id="a-gas" type="number" min="0" step="0.0001" value="0"></label>':'')+
-  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button></div></main>';
+  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form>'+(hasInvite?'':'<button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button>')+'</div></main>';
 }
 function renderLoading(message){setShell(false);document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
+var pendingInviteToken='';
+function inviteTokenFromUrl(){return new URLSearchParams(location.search).get('convite')||''}
+function clearInviteTokenFromUrl(){var url=new URL(location.href);url.searchParams.delete('convite');history.replaceState({},'',url.pathname+url.search+url.hash)}
+function renderResidentPassword(notice){
+  setShell(false);var app=document.getElementById('app');
+  app.innerHTML='<main style="max-width:480px;margin:10vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Ative seu acesso de morador</small></div></div><h2>Crie sua senha</h2><p class="note">Depois de definir a senha, você poderá entrar no aplicativo com este e-mail.</p>'+(notice?'<p class="pill warn" style="margin:10px 0">'+esc(notice)+'</p>':'')+'<form class="f" id="f-resident-password"><label>Nova senha<input id="resident-new-password" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirme a senha<input id="resident-confirm-password" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn" type="submit">Definir senha e acessar</button></form><button class="btn ghost" type="button" data-signout>Sair desta conta</button></div></main>';
+}
+async function acceptResidentInvite(session,token){
+  var accepted=await supabase.rpc('aceitar_convite',{_token:token});if(accepted.error)throw accepted.error;
+  await supabase.auth.updateUser({data:{sercon_convite_token:null}});
+  clearInviteTokenFromUrl();pendingInviteToken='';await loadWorkspace(session);
+}
+async function enterWorkspace(session){
+  var metadataToken=session.user&&session.user.user_metadata&&session.user.user_metadata.sercon_convite_token;
+  var urlToken=inviteTokenFromUrl();
+  if(metadataToken){pendingInviteToken=metadataToken;renderResidentPassword('');return}
+  if(urlToken){renderLoading('Confirmando convite…');await acceptResidentInvite(session,urlToken);return}
+  await loadWorkspace(session);
+}
 function dbRows(table){return supabase.from(table).select('*').then(function(r){if(r.error)throw r.error;return r.data||[]})}
 async function refreshPortariaConfig(){
   if(!supabase||!USER)return;
@@ -146,6 +169,43 @@ async function loadPortariaWorkspace(session,profile){
     if(denied){clearInterval(portariaCheckTimer);portariaCheckTimer=null;DB_READY=false;S=seed();authNotice='O síndico desabilitou o módulo Portaria ou removeu seu acesso.';renderAuth()}
   },30000);
 }
+async function loadResidentWorkspace(session,profile){
+  CONDO_ID=profile.condominio_id;
+  var residentResult=await supabase.from('moradores').select('*').eq('user_id',USER.id).eq('condominio_id',CONDO_ID).eq('tipo','inquilino').maybeSingle();
+  if(residentResult.error)throw residentResult.error;
+  var resident=residentResult.data;
+  if(!resident||!resident.unidade_id)throw new Error('Esta conta ainda não está vinculada a um apartamento. Peça ao síndico para reenviar o convite.');
+  var unitResult=await supabase.from('unidades').select('id,condominio_id,bloco_id,numero,status,aluguel_mensal,contrato_storage_path,contrato_nome,contrato_inicio,contrato_fim,vagas_estacionamento').eq('id',resident.unidade_id).eq('condominio_id',CONDO_ID).maybeSingle();
+  if(unitResult.error)throw unitResult.error;
+  if(!unitResult.data)throw new Error('O apartamento vinculado a esta conta não foi encontrado.');
+  var unit=unitResult.data;
+  var results=await Promise.all([
+    supabase.from('blocos').select('nome').eq('id',unit.bloco_id).maybeSingle(),
+    supabase.from('condominios').select('nome').eq('id',CONDO_ID).maybeSingle(),
+    supabase.from('cobrancas_unidade').select('*').eq('condominio_id',CONDO_ID).eq('unidade_id',unit.id).order('competencia',{ascending:false}),
+    supabase.from('cobrancas_taxas_adicionais').select('*').eq('condominio_id',CONDO_ID).eq('unidade_id',unit.id).order('competencia',{ascending:false}),
+    supabase.from('meios_pagamento_condominio').select('*').eq('condominio_id',CONDO_ID).eq('ativo',true).order('ordem'),
+    supabase.from('pagamentos_morador').select('*').eq('user_id',USER.id).eq('condominio_id',CONDO_ID).order('informado_em',{ascending:false}),
+    supabase.from('chamados').select('*').eq('condominio_id',CONDO_ID).eq('aberto_por',USER.id).order('criado_em',{ascending:false}),
+    supabase.from('encomendas').select('*').eq('condominio_id',CONDO_ID).eq('unidade_id',unit.id).order('chegada_em',{ascending:false}),
+    supabase.from('comunicados').select('*').eq('condominio_id',CONDO_ID).order('criado_em',{ascending:false}),
+  ]);
+  var failed=results.find(function(result){return result.error});if(failed)throw failed.error;
+  var block=results[0].data,condo=results[1].data;
+  if(!condo)throw new Error('O condomínio desta conta não foi encontrado.');
+  var label=(block&&block.nome||'')+'-'+unit.numero;
+  CURRENT_MORADOR=resident;COND=condo.nome;S=seed();S.residentCharges=results[2].data||[];S.residentExtraCharges=results[3].data||[];
+  S.meios=(results[4].data||[]).map(function(m){return {id:m.id,nome:m.nome,tipo:m.tipo,ativo:m.ativo,dados:m.dados_publicos||{},instrucoes:m.instrucoes||''}});
+  S.pagamentos=(results[5].data||[]).map(function(p){return {id:p.id,unidadeId:p.unidade_id,unidade:label,mes:p.competencia.slice(0,7),valor:Number(p.valor),meio:p.meio_nome_snapshot,meioId:p.meio_pagamento_id,data:p.informado_em,status:p.status==='confirmado'?'Confirmado':p.status==='recusado'?'Recusado':'Aguardando conferência'}});
+  S.chamados=(results[6].data||[]).map(function(c){return {id:c.id,unidade:label,titulo:c.titulo,status:c.status==='concluido'?'Resolvido':c.status==='em_andamento'?'Em andamento':'Aberto',data:(c.criado_em||c.created_at||'').slice(0,10)}});
+  S.encomendas=(results[7].data||[]).map(function(x){return {id:x.id,unidade:label,transp:x.transportadora||'',chegada:x.chegada_em,retirada:x.retirada_em||''}});
+  S.comunicados=(results[8].data||[]).map(function(x){return {id:x.id,titulo:x.titulo,texto:x.conteudo,data:(x.criado_em||'').slice(0,10)}});
+  var ownName=resident.nome||USER.email||'Morador';
+  var residentUnit={id:unit.id,bloco:block&&block.nome||'',apto:unit.numero,dono:'—',morador:ownName,tel:resident.telefone||'—',situacao:'Inquilino',taxa:0,aluguel:Number(unit.aluguel_mensal||(resident.contrato||{}).aluguel_mensal||0),leituras:{},pago:{},residentId:resident.id,contractPath:unit.contrato_storage_path,contractName:unit.contrato_nome,contractStart:unit.contrato_inicio,contractEnd:unit.contrato_fim,parkingSpaces:Array.isArray(unit.vagas_estacionamento)?unit.vagas_estacionamento:[]};
+  S.unidades=[residentUnit];MY=label;
+  var currentBill=cobrancaMorador(MES);if(currentBill.paid)residentUnit.pago[MES]=true;
+  role='morador';view='minha';DB_READY=true;setMes(MES);render();
+}
 async function loadWorkspace(session){
   USER=session.user;
   var profileRes=await supabase.from('profiles').select('nome,email,condominio_id').eq('id',USER.id).maybeSingle();
@@ -156,6 +216,10 @@ async function loadWorkspace(session){
   if(userRoles.some(function(x){return x.role==='porteiro'})&&!userRoles.some(function(x){return x.role==='sindico'||x.role==='super_admin'})){
     if(!profileRes.data||!profileRes.data.condominio_id)throw new Error('Esta conta de portaria ainda não está vinculada a um condomínio.');
     await loadPortariaWorkspace(session,profileRes.data);return;
+  }
+  if(userRoles.some(function(x){return x.role==='morador'})&&!userRoles.some(function(x){return x.role==='sindico'||x.role==='super_admin'})){
+    if(!profileRes.data||!profileRes.data.condominio_id)throw new Error('Esta conta de morador ainda não está vinculada ao condomínio. Peça um novo convite ao síndico.');
+    await loadResidentWorkspace(session,profileRes.data);return;
   }
   if(!userRoles.some(function(x){return x.role==='sindico'||x.role==='super_admin'}))throw new Error('Esta conta ainda não está vinculada ao perfil do condomínio.');
   CONDO_ID=profileRes.data&&profileRes.data.condominio_id;
@@ -174,7 +238,7 @@ async function loadWorkspace(session){
   D.competencias.forEach(function(x){var m=x.competencia.slice(0,7);S.config.contaMes[m]=Number(x.conta_agua);S.config.tarifaMes[m]=Number(x.tarifa_gas_m3)});
   var morByUnit={};D.moradores.forEach(function(m){morByUnit[m.unidade_id]=morByUnit[m.unidade_id]||[];morByUnit[m.unidade_id].push(m)});
   var readByUnit={};D.leituras.forEach(function(l){readByUnit[l.unidade_id]=readByUnit[l.unidade_id]||{};readByUnit[l.unidade_id][l.competencia.slice(0,7)]=readByUnit[l.unidade_id][l.competencia.slice(0,7)]||{};readByUnit[l.unidade_id][l.competencia.slice(0,7)][l.tipo]=[Number(l.leitura_anterior),Number(l.leitura_atual)]});
-  S.unidades=D.unidades.map(function(u){var ms=morByUnit[u.id]||[],owner=ms.find(function(m){return m.tipo==='proprietario'}),tenants=ms.filter(function(m){return m.tipo==='inquilino'}),dependents=ms.filter(function(m){return m.tipo==='dependente'}),residents=tenants.length?tenants:dependents,primary=residents[0],block=D.blocos.find(function(b){return b.id===u.bloco_id});var lease=primary&&primary.contrato||{};return {id:u.id,bloco:block?block.nome:'',apto:u.numero,dono:owner?owner.nome:'',morador:residents.length?residents.map(function(m){return m.nome}).join(', '):owner?owner.nome:'—',tel:primary&&primary.telefone||owner&&owner.telefone||'—',situacao:u.status==='vago'?'Vago':tenants.length?'Inquilino':'Proprietário residente',taxa:S.config.taxaCondominio,aluguel:Number(u.aluguel_mensal||lease.aluguel_mensal||0),leituras:readByUnit[u.id]||{},pago:{},ownerId:owner&&owner.id,residentIds:residents.map(function(m){return m.id}),contractPath:u.contrato_storage_path,contractName:u.contrato_nome,contractStart:u.contrato_inicio,contractEnd:u.contrato_fim,gasMeter:u.gas_medidor,waterMeter:u.agua_medidor,parkingSpaces:Array.isArray(u.vagas_estacionamento)?u.vagas_estacionamento:[]}});
+  S.unidades=D.unidades.map(function(u){var ms=morByUnit[u.id]||[],owner=ms.find(function(m){return m.tipo==='proprietario'}),tenants=ms.filter(function(m){return m.tipo==='inquilino'}),dependents=ms.filter(function(m){return m.tipo==='dependente'}),residents=tenants.length?tenants:dependents,primary=residents[0],block=D.blocos.find(function(b){return b.id===u.bloco_id});var lease=primary&&primary.contrato||{};return {id:u.id,bloco:block?block.nome:'',apto:u.numero,dono:owner?owner.nome:'',morador:residents.length?residents.map(function(m){return m.nome}).join(', '):owner?owner.nome:'—',tel:primary&&primary.telefone||owner&&owner.telefone||'—',situacao:u.status==='vago'?'Vago':tenants.length?'Inquilino':'Proprietário residente',taxa:S.config.taxaCondominio,aluguel:Number(u.aluguel_mensal||lease.aluguel_mensal||0),leituras:readByUnit[u.id]||{},pago:{},ownerId:owner&&owner.id,residentIds:residents.map(function(m){return m.id}),residentEmails:residents.map(function(m){return m.email||''}),residentUsers:residents.map(function(m){return m.user_id||''}),contractPath:u.contrato_storage_path,contractName:u.contrato_nome,contractStart:u.contrato_inicio,contractEnd:u.contrato_fim,gasMeter:u.gas_medidor,waterMeter:u.agua_medidor,parkingSpaces:Array.isArray(u.vagas_estacionamento)?u.vagas_estacionamento:[]}});
   var paidRows={};D.cobrancas.forEach(function(c){var key=c.unidade_id+':'+c.competencia.slice(0,7);paidRows[key]=paidRows[key]||{total:0,paid:0};paidRows[key].total++;if(c.status==='pago')paidRows[key].paid++});
   D.taxasCobradas.forEach(function(c){var key=c.unidade_id+':'+c.competencia.slice(0,7);paidRows[key]=paidRows[key]||{total:0,paid:0};paidRows[key].total++;if(c.status==='pago')paidRows[key].paid++});
   Object.keys(paidRows).forEach(function(key){var parts=key.split(':'),u=S.unidades.find(function(x){return x.id===parts[0]});if(u&&paidRows[key].total&&paidRows[key].total===paidRows[key].paid)u.pago[parts[1]]=true});
@@ -208,7 +272,7 @@ async function persistWorkspace(){
   var unitRows=S.unidades.map(function(u){return {id:u.id,condominio_id:CONDO_ID,bloco_id:BLOCK_IDS[u.bloco],numero:u.apto,status:u.situacao==='Vago'?'vago':'ocupado',aluguel_mensal:Number(u.aluguel||0),gas_medidor:u.gasMeter||null,agua_medidor:u.waterMeter||null,contrato_storage_path:u.contractPath||null,contrato_nome:u.contractName||null,contrato_inicio:u.contractStart||null,contrato_fim:u.contractEnd||null,vagas_estacionamento:u.parkingSpaces||[]}});
   if(unitRows.length)ok(await supabase.from('unidades').upsert(unitRows,{onConflict:'id'}));
   var residentRows=[];
-  S.unidades.forEach(function(u){if(u.dono){u.ownerId=u.ownerId||uid();residentRows.push({id:u.ownerId,condominio_id:CONDO_ID,unidade_id:u.id,nome:u.dono,tipo:'proprietario',telefone:u.tel==='—'?null:u.tel})}var names=splitNames(u.morador).filter(function(n){return n&&n!=='—'&&n!==u.dono});names.forEach(function(name,i){var residentId=(u.residentIds||[])[i]||uid();u.residentIds=u.residentIds||[];u.residentIds[i]=residentId;residentRows.push({id:residentId,condominio_id:CONDO_ID,unidade_id:u.id,nome:name,tipo:u.situacao==='Inquilino'?'inquilino':'dependente',telefone:u.tel==='—'?null:u.tel,contrato:u.situacao==='Inquilino'?{aluguel_mensal:Number(u.aluguel||0),inicio:u.contractStart||null,fim:u.contractEnd||null}:null})})});
+  S.unidades.forEach(function(u){if(u.dono){u.ownerId=u.ownerId||uid();residentRows.push({id:u.ownerId,condominio_id:CONDO_ID,unidade_id:u.id,nome:u.dono,tipo:'proprietario',telefone:u.tel==='—'?null:u.tel})}var names=splitNames(u.morador).filter(function(n){return n&&n!=='—'&&n!==u.dono});names.forEach(function(name,i){var residentId=(u.residentIds||[])[i]||uid();u.residentIds=u.residentIds||[];u.residentIds[i]=residentId;residentRows.push({id:residentId,condominio_id:CONDO_ID,unidade_id:u.id,nome:name,tipo:u.situacao==='Inquilino'?'inquilino':'dependente',telefone:u.tel==='—'?null:u.tel,email:(u.residentEmails||[])[i]||null,contrato:u.situacao==='Inquilino'?{aluguel_mensal:Number(u.aluguel||0),inicio:u.contractStart||null,fim:u.contractEnd||null}:null})})});
   if(residentRows.length)ok(await supabase.from('moradores').upsert(residentRows,{onConflict:'id'}));
   var competencia=MES+'-01';
   var fee={condominio_id:CONDO_ID,competencia:competencia,conta_agua:Number(contaAguaDe(MES)||0),tarifa_gas_m3:Number(tarifaDe(MES)||0),modo_rateio_agua:S.config.modoAgua==='igual'?'igual':'consumo',incluir_aluguel_na_cobranca:!!S.config.cobrarAluguel,updated_by:USER.id,updated_at:new Date().toISOString()};
@@ -275,7 +339,27 @@ function vDash(){
 
 function vUnits(){
   var blocks=Array.from(new Set(S.unidades.map(function(u){return u.bloco}))).sort();
-  var tenantEditor=function(u){if(activeUnitId!==u.id)return '';var extras=extrasDe(u,MES),c=cobranca(u),isEditing=editingTenant&&u.situacao==='Inquilino',isVacant=u.situacao==='Vago';return '<div class="unit-modal-backdrop" data-unit-modal-backdrop><section class="panel unit-detail" role="dialog" aria-modal="true" aria-labelledby="unit-modal-title"><div class="unit-detail-head"><div><h3 id="unit-modal-title">Apartamento '+esc(u.apto)+'</h3><p class="note">Bloco '+esc(u.bloco)+' · '+esc(u.situacao)+'</p></div><button class="btn sm ghost" type="button" data-close-unit data-unit-modal-close aria-label="Fechar detalhes do apartamento">Fechar</button></div><div class="unit-detail-grid"><div><small>Proprietário</small><b>'+esc(u.dono||'—')+'</b></div><div><small>Moradores/inquilinos</small><b>'+esc(u.morador||'—')+'</b></div><div><small>Contato</small><b>'+esc(u.tel||'—')+'</b></div><div><small>Condomínio mensal</small><b>'+brl(c.taxa)+'</b></div><div><small>Aluguel</small><b>'+(u.aluguel?brl(u.aluguel):'—')+'</b></div><div><small>Medidor de água</small><b>'+esc(u.waterMeter||'—')+'</b></div><div><small>Medidor de gás</small><b>'+esc(u.gasMeter||'—')+'</b></div><div><small>Vagas de estacionamento</small><b>'+(u.parkingSpaces&&u.parkingSpaces.length?u.parkingSpaces.map(esc).join(', '):'—')+'</b></div></div><p>Taxas adicionais: '+(extras.length?extras.map(function(x){return esc(x.nome)+' '+brl(x.valor)}).join(' · '):'—')+'</p><div class="unit-tile-actions">'+(u.contractPath?'<button class="btn sm ghost" data-contract="'+esc(u.contractPath)+'">'+(isVacant?'Abrir último contrato':'Abrir contrato')+'</button>':'<span class="pill mute">Sem contrato</span>')+'<button class="btn sm danger" data-del-unit="'+esc(u.id)+'">Remover apartamento</button></div>'+(isVacant||isEditing?'<h4>'+(isEditing?'Editar inquilino':'Novo inquilino')+'</h4><p class="note">'+(isEditing?'Atualize os dados da locação atual.':'A unidade, o bloco, os medidores e as vagas ficam cadastrados. Preencha os dados da nova locação.')+'</p><form class="f" id="f-tenant" data-unit-id="'+esc(u.id)+'"><label class="wide">Nomes dos moradores/inquilinos<textarea id="n-nomes" rows="4" required placeholder="Digite um nome por linha">'+(isEditing?splitNames(u.morador).map(function(name){return esc(name)}).join('&#10;'):'')+'</textarea><small>Digite cada pessoa em uma linha. Todos ficarão vinculados a este apartamento.</small></label><label>Telefone<input id="n-tel" type="tel" value="'+(isEditing?esc(u.tel==='—'?'':u.tel):'')+'" placeholder="(47) 90000-0000"></label><label>Aluguel mensal (R$)<input id="n-aluguel" type="number" min="0" step="0.01" value="'+(isEditing?Number(u.aluguel||0):0)+'" required></label><label>Início do contrato<input id="n-inicio" type="date" value="'+(isEditing?esc(u.contractStart||''):'')+'"></label><label>Fim do contrato<input id="n-fim" type="date" value="'+(isEditing?esc(u.contractEnd||''):'')+'"></label><label class="wide">Contrato de aluguel (opcional)<input id="n-contrato" type="file" accept="application/pdf,image/jpeg,image/png"></label><button class="btn" type="submit">'+(isEditing?'Salvar alterações':'Cadastrar inquilino nesta unidade')+'</button>'+(isEditing?'<button class="btn ghost" type="button" data-cancel-edit>Cancelar edição</button>':'')+'</form>':u.situacao==='Inquilino'?'<div class="unit-detail-actions"><div><h4>Ocupação atual</h4><p>Inquilino(s): <b>'+esc(u.morador||'—')+'</b> · aluguel: <b>'+brl(u.aluguel||0)+'</b></p><p class="note">Ao registrar a desocupação, o apartamento continuará cadastrado.</p></div><div><button class="btn sm ghost" type="button" data-edit-tenant>Editar inquilino</button> <button class="btn sm danger" type="button" data-vacate="'+esc(u.id)+'">Registrar desocupação</button></div></div>':'<p class="note">Este apartamento está ocupado pelo proprietário. Os dados da unidade permanecem disponíveis para consulta.</p>')+'</section></div>'};
+var tenantEditor=function(u){
+  if(activeUnitId!==u.id)return '';
+  var extras=extrasDe(u,MES),c=cobranca(u),isEditing=editingTenant&&u.situacao==='Inquilino',isVacant=u.situacao==='Vago';
+  var form=(isVacant||isEditing)
+    ?'<h4>'+(isEditing?'Editar inquilino':'Nova locação')+'</h4><p class="note">'+(isEditing?'Atualize os dados da locação atual.':'A unidade, o bloco, os medidores e as vagas já estão cadastrados. Preencha os dados da nova locação.')+'</p><form class="f" id="f-tenant" data-unit-id="'+esc(u.id)+'"><label class="wide">Nomes dos moradores/inquilinos<textarea id="n-nomes" rows="4" required placeholder="Digite um nome por linha">'+(isEditing?splitNames(u.morador).map(function(name){return esc(name)}).join('&#10;'):'')+'</textarea><small>Digite cada pessoa em uma linha. O acesso ao aplicativo é cadastrado separadamente, depois de salvar a locação.</small></label><label>Telefone<input id="n-tel" type="tel" value="'+(isEditing?esc(u.tel==='—'?'':u.tel):'')+'" placeholder="(47) 90000-0000"></label><label>Aluguel mensal (R$)<input id="n-aluguel" type="number" min="0" step="0.01" value="'+(isEditing?Number(u.aluguel||0):0)+'" required></label><label>Início do contrato<input id="n-inicio" type="date" value="'+(isEditing?esc(u.contractStart||''):'')+'"></label><label>Fim do contrato<input id="n-fim" type="date" value="'+(isEditing?esc(u.contractEnd||''):'')+'"></label><label class="wide">Contrato de aluguel (opcional)<input id="n-contrato" type="file" accept="application/pdf,image/jpeg,image/png"></label><button class="btn" type="submit">'+(isEditing?'Salvar dados da locação':'Salvar locação')+'</button>'+(isEditing?'<button class="btn ghost" type="button" data-cancel-edit>Cancelar edição</button>':'')+'</form>'
+    :'';
+  var access='';
+  if(u.situacao==='Inquilino'&&!isEditing){
+    var names=splitNames(u.morador),ids=u.residentIds||[],emails=u.residentEmails||[],users=u.residentUsers||[];
+    var accessRows=ids.map(function(id,index){
+      var name=names[index]||('Morador '+(index+1)),email=emails[index]||'',active=!!users[index],pending=!!RESIDENT_INVITES[id];
+      if(active)delete RESIDENT_INVITES[id];
+      return '<article class="resident-access-row"><div class="resident-access-person"><b>'+esc(name)+'</b><span class="pill '+(active?'ok':pending?'warn':'mute')+'">'+(active?'Acesso ativo':pending?'Convite enviado':'Sem acesso')+'</span></div>'+(active?'<p class="note">Este morador já consegue entrar no aplicativo com '+esc(email||'o e-mail cadastrado')+'.</p>':(pending?'<p class="note">O convite foi enviado para '+esc(email)+'. O morador precisa abrir o link e criar a senha para ativar o acesso.</p>':'')+'<form class="f resident-access-form" data-resident-access-form data-unit-id="'+esc(u.id)+'" data-resident-id="'+esc(id)+'"><label class="wide">E-mail de acesso<input type="email" name="email" value="'+esc(email)+'" required placeholder="morador@email.com" autocomplete="email"></label><button class="btn sm" type="submit">'+(pending?'Reenviar convite':'Cadastrar acesso e enviar convite')+'</button></form>')+'</article>';
+    }).join('');
+    access='<section class="resident-access panel"><div><h4>Acesso ao aplicativo</h4><p class="note">Cadastre o acesso de cada morador separadamente. O convite será enviado para o e-mail informado.</p></div>'+(accessRows||'<p class="empty">Não há moradores cadastrados nesta locação.</p>')+'</section>';
+  }
+  var current=u.situacao==='Inquilino'
+    ?'<div class="unit-detail-actions"><div><h4>Ocupação atual</h4><p>Inquilino(s): <b>'+esc(u.morador||'—')+'</b> · aluguel: <b>'+brl(u.aluguel||0)+'</b></p><p class="note">Ao registrar a desocupação, o apartamento continuará cadastrado.</p></div><div><button class="btn sm ghost" type="button" data-edit-tenant>Editar locação</button> <button class="btn sm danger" type="button" data-vacate="'+esc(u.id)+'">Registrar desocupação</button></div></div>'
+    :u.situacao==='Proprietário residente'?'<p class="note">Este apartamento está ocupado pelo proprietário. Os dados da unidade permanecem disponíveis para consulta.</p>':'';
+  return '<div class="unit-modal-backdrop" data-unit-modal-backdrop><section class="panel unit-detail" role="dialog" aria-modal="true" aria-labelledby="unit-modal-title"><div class="unit-detail-head"><div><h3 id="unit-modal-title">Apartamento '+esc(u.apto)+'</h3><p class="note">Bloco '+esc(u.bloco)+' · '+esc(u.situacao)+'</p></div><button class="btn sm ghost" type="button" data-close-unit data-unit-modal-close aria-label="Fechar detalhes do apartamento">Fechar</button></div><div class="unit-detail-grid"><div><small>Proprietário</small><b>'+esc(u.dono||'—')+'</b></div><div><small>Moradores/inquilinos</small><b>'+esc(u.morador||'—')+'</b></div><div><small>Contato</small><b>'+esc(u.tel||'—')+'</b></div><div><small>Condomínio mensal</small><b>'+brl(c.taxa)+'</b></div><div><small>Aluguel</small><b>'+(u.aluguel?brl(u.aluguel):'—')+'</b></div><div><small>Medidor de água</small><b>'+esc(u.waterMeter||'—')+'</b></div><div><small>Medidor de gás</small><b>'+esc(u.gasMeter||'—')+'</b></div><div><small>Vagas de estacionamento</small><b>'+(u.parkingSpaces&&u.parkingSpaces.length?u.parkingSpaces.map(esc).join(', '):'—')+'</b></div></div><p>Taxas adicionais: '+(extras.length?extras.map(function(x){return esc(x.nome)+' '+brl(x.valor)}).join(' · '):'—')+'</p><div class="unit-tile-actions">'+(u.contractPath?'<button class="btn sm ghost" data-contract="'+esc(u.contractPath)+'">'+(isVacant?'Abrir último contrato':'Abrir contrato')+'</button>':'<span class="pill mute">Sem contrato</span>')+'<button class="btn sm danger" data-del-unit="'+esc(u.id)+'">Remover apartamento</button></div>'+current+form+access+'</section></div>';
+};
   var blockPanels=blocks.map(function(bl){var us=S.unidades.filter(function(u){return u.bloco===bl}).sort(function(a,b){return a.apto.localeCompare(b.apto,undefined,{numeric:true})}),cards=us.map(function(u){return '<article class="unit-tile" role="button" tabindex="0" aria-expanded="'+(activeUnitId===u.id)+'" data-open-unit="'+esc(u.id)+'"><div class="unit-tile-head"><b>Apto '+esc(u.apto)+'</b><span class="pill '+(u.situacao==='Vago'?'mute':u.situacao==='Inquilino'?'warn':'ok')+'">'+(u.situacao==='Proprietário residente'?'Proprietário':esc(u.situacao))+'</span></div><p>'+esc(u.morador&&u.morador!=='—'?u.morador:'Sem morador cadastrado')+'</p></article>'}).join(''),selected=S.unidades.find(function(u){return u.id===activeUnitId&&u.bloco===bl});return '<section class="block-column"><h3>Bloco '+esc(bl)+'<span class="pill mute">'+us.length+' aptos</span></h3><div class="unit-grid">'+cards+'</div>'+(selected?tenantEditor(selected):'')+'</section>'});
   var tabBar='<div class="subtabs" role="tablist" aria-label="Unidades e moradores"><button type="button" role="tab" data-unit-tab="apartamentos" aria-selected="'+(unitTab==='apartamentos')+'">Apartamentos por bloco</button><button type="button" role="tab" data-unit-tab="cadastro" aria-selected="'+(unitTab==='cadastro')+'">Cadastrar unidade</button></div>';
   var settingsAndForm='<div class="panel"><h3>Taxa padrão do condomínio</h3><form class="f" id="f-config"><label>Valor mensal (R$)<input id="cfg-taxa" type="number" min="0" step="0.01" value="'+Number(S.config.taxaCondominio||0)+'" required></label><label>Dia de vencimento<input id="cfg-venc" type="number" min="1" max="28" value="'+Number(S.config.vencimentoDia||10)+'" required></label><button class="btn" type="submit">Salvar cobrança padrão</button></form><p class="note">O valor padrão é aplicado automaticamente às unidades ocupadas; o síndico pode gerar ou recalcular as cobranças do mês no Financeiro.</p></div>'+
@@ -326,26 +410,7 @@ function vTaxas(){
     var aplic=t.aplica==='todas'?'Todos os apartamentos':t.aplica==='ocupadas'?'Apartamentos ocupados':'Escolhidos: '+alvo.map(uLabel).join(', ');
     var st=vig?'<span class="pill ok">Ativa</span>':(MES<t.inicio?'<span class="pill warn">Começa em '+mesCurto(t.inicio)+'</span>':'<span class="pill mute">Encerrada</span>');
     return '<tr><td><b>'+esc(t.nome)+'</b></td><td class="num">'+brl(t.valor)+(t.modo==='rateio'?' no total':' por apto')+'</td><td>'+aplic+'</td><td class="num">'+(vig?brl(por)+' por apto':'—')+'</td><td class="num">'+mesCurto(t.inicio)+(t.fim?' a '+mesCurto(t.fim):' em diante')+'</td><td>'+st+'</td><td><div class="row-actions">'+(vig&&!t.fim?'<button class="btn sm ghost" data-end-taxa="'+t.id+'">Encerrar após este mês</button>':'')+'<button class="btn sm danger" data-del-taxa="'+t.id+'">Excluir</button></div></td></tr>'}).join('');
-  return head('Taxas adicionais','Lixo, esgoto, fundo de reserva e outras cobranças por apartamento')+
-  '<div class="panel"><h3>Nova taxa</h3><form class="f" id="f-taxa">'+
-   '<label>Nome da taxa<input id="t-nome" required placeholder="Taxa de lixo"></label>'+
-   '<label>Valor (R$)<input id="t-valor" type="number" min="0.01" step="0.01" required></label>'+
-   '<label>Como cobrar<select id="t-modo"><option value="fixa">Valor fixo por apartamento</option><option value="rateio">Valor total dividido entre os apartamentos</option></select></label>'+
-   '<label>Cobrar de<select id="t-aplica"><option value="todas">Todos os apartamentos</option><option value="ocupadas">Somente apartamentos ocupados</option><option value="selecionadas">Apenas os marcados abaixo</option></select></label>'+
-   '<label>A partir de<select id="t-ini">'+mo(MES)+'</select></label>'+
-   '<label>Até<select id="t-fim"><option value="">Sem data final</option>'+mo('')+'</select></label>'+
-   '<div class="wide"><span style="font-size:12px;color:var(--muted)">Apartamentos (vale só para "Apenas os marcados")</span><div class="checks">'+
-    S.unidades.map(function(u){return '<label class="chk"><input type="checkbox" id="tu-'+u.id+'">'+uLabel(u)+'</label>'}).join('')+'</div></div>'+
-   '<button class="btn" type="submit">Cadastrar taxa</button></form>'+
-  '<p class="note">Total de taxas adicionais em '+MES_LABEL+': <b class="num">'+brl(somaMes)+'</b>. Cada taxa entra no total a pagar de cada apartamento na aba Financeiro.</p>'+
-  '<div class="tablewrap"><table><thead><tr><th>Taxa</th><th>Valor</th><th>Cobrada de</th><th>Em '+mesCurto(MES)+'</th><th>Vigência</th><th>Situação</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="empty">Nenhuma taxa adicional cadastrada.</td></tr>')+'</tbody></table></div></div>';
-}
-
-var TIPOS={pix:'PIX',transferencia:'Transferência bancária',boleto:'Boleto',dinheiro:'Dinheiro ou cheque',mercadopago:'Mercado Pago'};
-function meioResumo(m){var d=m.dados||{};
-  if(m.tipo==='pix')return esc((d.tipoChave||'Chave')+': '+(d.chave||'—')+(d.favorecido?' · '+d.favorecido:''));
-  if(m.tipo==='transferencia')return esc((d.banco||'Banco')+' · ag. '+(d.agencia||'—')+' · conta '+(d.conta||'—')+(d.favorecido?' · '+d.favorecido:''));
-  if(m.tipo==='mercadopago'){var f=[['pix','Pix'],['cartao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
+  return head('Taxas adicion…577 tokens truncated…artao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
   return esc(m.instrucoes||'—')}
 function g(tipos,html){return '<label data-tipos="'+tipos+'"'+(tipos.split(' ').indexOf('pix')<0?' hidden':'')+'>'+html+'</label>'}
 function vPag(inFinance){
@@ -364,7 +429,8 @@ function vPag(inFinance){
   '<h3 style="margin-top:20px">Meio ativo para os moradores</h3><div class="tablewrap"><table><thead><tr><th>Tipo</th><th>Dados exibidos</th><th>Situação</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="3" class="empty">Nenhuma forma de pagamento configurada.</td></tr>')+'</tbody></table></div></div>'+
   '<div class="panel"><h3>Pagamentos informados pelos moradores</h3><div class="tablewrap"><table><thead><tr><th>Data</th><th>Unidade</th><th>Mês</th><th>Valor</th><th>Meio</th><th>Situação</th><th></th></tr></thead><tbody>'+(infos||'<tr><td colspan="7" class="empty">Nenhum pagamento informado ainda.</td></tr>')+'</tbody></table></div></div>';
 }
-function registrarPag(m,status){var u=unitByLabel(MY)||S.unidades[0],c=cobranca(u);
+async function registrarPag(m,status){var u=unitByLabel(MY)||S.unidades[0],resident=role==='morador',bill=resident?cobrancaMorador(MES):null,c=resident?{total:bill.total}:cobranca(u);
+  if(resident){if(!CURRENT_MORADOR||!bill.items.length){flash('Ainda não há cobrança lançada para este mês.');return}var inserted=await supabase.from('pagamentos_morador').insert({condominio_id:CONDO_ID,unidade_id:u.id,morador_id:CURRENT_MORADOR.id,competencia:MES+'-01',valor:c.total,meio_pagamento_id:m.id||null,meio_nome_snapshot:m.nome,status:'aguardando_conferencia'}).select().single();if(inserted.error){flash('Não foi possível registrar o pagamento: '+inserted.error.message);return}S.pagamentos.unshift({id:inserted.data.id,unidadeId:u.id,unidade:uLabel(u),mes:MES,valor:c.total,meio:m.nome,meioId:m.id,data:inserted.data.informado_em,status:'Aguardando conferência'});render();return}
   S.pagamentos.push({id:uid(),unidadeId:u.id,unidade:uLabel(u),mes:MES,valor:c.total,meio:m.nome,meioId:m.id,data:now(),status:status});
   if(status==='Confirmado')u.pago[MES]=true;save()}
 function pagarHtml(u,c,p){
@@ -529,28 +595,25 @@ function vTenantEncomendas(){
 }
 
 function vTenantPayment(){
-  var u=unitByLabel(MY)||S.unidades[0],p=paid(u),c=cobranca(u);
+  var u=unitByLabel(MY)||S.unidades[0],resident=role==='morador',own=resident?cobrancaMorador(MES):null,p=resident?own.paid:paid(u),c=resident?{total:own.total}:cobranca(u);
   var tr=function(l,v,cls){return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+l+'</td><td class="num">'+v+'</td></tr>'};
-  var rows=tr('Taxa condominial',brl(c.taxa));
-  c.extras.forEach(function(e){rows+=tr(esc(e.nome),brl(e.valor))});
-  if(c.extras.length>1)rows+=tr('<i>Soma das taxas adicionais</i>','<i>'+brl(c.extrasTotal)+'</i>');
-  rows+=tr('Água ('+lei(u,'agua').toFixed(1)+' m³)',brl(c.agua))+tr('Gás ('+lei(u,'gas').toFixed(1)+' m³)',brl(c.gas));
-  if(c.aluguel)rows+=tr('Aluguel'+(S.config.cobrarAluguel?'':' (pago ao proprietário)'),brl(c.aluguel));
-  rows+=tr(S.config.cobrarAluguel&&c.aluguel?'Total a pagar (com aluguel)':'Total a pagar ao condomínio',brl(c.total),'tot');
-  if(c.aluguel&&!S.config.cobrarAluguel)rows+=tr('Total com aluguel',brl(r2(c.total+c.aluguel)),'tot');
+  var rows='';
+  if(resident){rows=own.items.length?own.items.map(function(item){return tr(esc(item.descricao),brl(item.valor))}).join(''):tr('Cobrança do mês','Ainda não lançada');if(own.items.length)rows+=tr('Total a pagar',brl(c.total),'tot')}
+  else{rows=tr('Taxa condominial',brl(c.taxa));c.extras.forEach(function(e){rows+=tr(esc(e.nome),brl(e.valor))});if(c.extras.length>1)rows+=tr('<i>Soma das taxas adicionais</i>','<i>'+brl(c.extrasTotal)+'</i>');rows+=tr('Água ('+lei(u,'agua').toFixed(1)+' m³)',brl(c.agua))+tr('Gás ('+lei(u,'gas').toFixed(1)+' m³)',brl(c.gas));if(c.aluguel)rows+=tr('Aluguel'+(S.config.cobrarAluguel?'':' (pago ao proprietário)'),brl(c.aluguel));rows+=tr(S.config.cobrarAluguel&&c.aluguel?'Total a pagar (com aluguel)':'Total a pagar ao condomínio',brl(c.total),'tot');if(c.aluguel&&!S.config.cobrarAluguel)rows+=tr('Total com aluguel',brl(r2(c.total+c.aluguel)),'tot')}
   var status=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
-  return head('Pagamentos',esc(MES_LABEL)+' · Unidade '+esc(uLabel(u)))+'<div class="panel"><div class="item"><div><b>Situação da cobrança</b><p>Total deste mês: <strong class="num">'+brl(c.total)+'</strong></p></div>'+status+'</div><h3>Detalhamento</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+pagarHtml(u,c,p);
+  return head('Pagamentos',esc(MES_LABEL)+' · Unidade '+esc(uLabel(u)))+'<div class="panel"><div class="item"><div><b>Situação da cobrança</b><p>Total deste mês: <strong class="num">'+brl(c.total)+'</strong></p></div>'+(own&&!own.items.length?'<span class="pill mute">Sem lançamento</span>':status)+'</div><h3>Detalhamento</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+pagarHtml(u,c,p);
 }
 
 function vMinha(){
-  var u=unitByLabel(MY)||S.unidades[0],ul=uLabel(u);
-  var p=paid(u),c=cobranca(u),enc=S.encomendas.filter(function(e){return e.unidade===ul&&!e.retirada}).length,calls=S.chamados.filter(function(ch){return ch.unidade===ul&&ch.status!=='Resolvido'}).length;
+  var u=unitByLabel(MY)||S.unidades[0],ul=uLabel(u),resident=role==='morador',own=resident?cobrancaMorador(MES):null;
+  var p=resident?own.paid:paid(u),c=resident?{total:own.total}:cobranca(u),enc=S.encomendas.filter(function(e){return e.unidade===ul&&!e.retirada}).length,calls=S.chamados.filter(function(ch){return ch.unidade===ul&&ch.status!=='Resolvido'}).length;
   var st=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
   var unitDisplay=role==='morador'?'<div><small>Minha unidade</small><b>'+esc(ul)+'</b></div>':'<div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div>';
   var news=S.comunicados.slice().sort(function(a,b){return b.data.localeCompare(a.data)})[0];
+  var contract=resident?(u.contractPath?'<div class="panel resident-contract"><div><h3>Contrato de locação</h3><p class="note">'+esc(u.contractName||'Contrato anexado pelo síndico')+'</p></div><button class="btn" type="button" data-contract="'+esc(u.contractPath)+'">Abrir contrato</button></div>':'<div class="panel"><h3>Contrato de locação</h3><p class="empty">O síndico ainda não anexou um contrato para esta locação.</p></div>'):'';
   return head('Minha unidade',esc(COND)+' · '+ul+' · '+MES_LABEL)+
   '<div class="panel"><div class="unit-card">'+unitDisplay+'<div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Moradores</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
-  '<div class="grid resident-shortcuts"><button class="panel resident-shortcut" type="button" data-nav="pagamentos"><small>Pagamento do mês</small><b>'+brl(c.total)+'</b><span>'+ (p?'Cobrança paga':'Ver cobrança e pagar')+'</span></button><button class="panel resident-shortcut" type="button" data-nav="chamados"><small>Meus chamados</small><b>'+calls+'</b><span>Solicitações em andamento</span></button><button class="panel resident-shortcut" type="button" data-nav="encomendas"><small>Encomendas</small><b>'+enc+'</b><span>Aguardando retirada</span></button></div>'+
+  contract+'<div class="grid resident-shortcuts"><button class="panel resident-shortcut" type="button" data-nav="pagamentos"><small>Pagamento do mês</small><b>'+brl(c.total)+'</b><span>'+ (p?'Cobrança paga':own&&!own.items.length?'Cobrança ainda não lançada':'Ver cobrança e pagar')+'</span></button><button class="panel resident-shortcut" type="button" data-nav="chamados"><small>Meus chamados</small><b>'+calls+'</b><span>Solicitações em andamento</span></button><button class="panel resident-shortcut" type="button" data-nav="encomendas"><small>Encomendas</small><b>'+enc+'</b><span>Aguardando retirada</span></button></div>'+
   '<div class="panel resident-news"><div><small>Comunicado recente</small><b>'+(news?esc(news.titulo):'Nenhum comunicado novo')+'</b><p>'+(news?esc(news.texto):'Os avisos do condomínio aparecerão aqui.')+'</p></div><button class="btn ghost sm" type="button" data-nav="comunicacao">Ver avisos</button></div>';
 }
 
@@ -584,7 +647,15 @@ document.addEventListener('click',async function(e){
   if(e.target.closest('[data-close-unit]')){closeUnitModal();return}
   if(e.target.closest('[data-edit-tenant]')){editingTenant=true;render();var firstTenantField=document.getElementById('n-nomes');if(firstTenantField)firstTenantField.focus();return}
   if(e.target.closest('[data-cancel-edit]')){editingTenant=false;render();return}
-  var vacate=e.target.closest('[data-vacate]');if(vacate){var leaving=S.unidades.find(function(u){return u.id===vacate.dataset.vacate});if(!leaving||leaving.situacao!=='Inquilino')return;if(!window.confirm('Registrar a saída do(s) inquilino(s) de '+uLabel(leaving)+'? O apartamento e os dados do bloco serão mantidos.'))return;var deleted=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('unidade_id',leaving.id).eq('tipo','inquilino');if(deleted.error){flash('Não foi possível registrar a desocupação: '+deleted.error.message);return}leaving.morador='—';leaving.tel='—';leaving.situacao='Vago';leaving.aluguel=0;leaving.residentIds=[];leaving.contractStart=null;leaving.contractEnd=null;leaving.pago={};activeUnitId=leaving.id;editingTenant=false;save();await saveQueue;toast('Unidade '+uLabel(leaving)+' marcada como vaga');return}
+  var vacate=e.target.closest('[data-vacate]');if(vacate){
+    var leaving=S.unidades.find(function(u){return u.id===vacate.dataset.vacate});if(!leaving||leaving.situacao!=='Inquilino')return;
+    if(!window.confirm('Registrar a saída do(s) inquilino(s) de '+uLabel(leaving)+'? O apartamento e os dados do bloco serão mantidos.'))return;
+    var linked=await supabase.from('moradores').select('id,user_id').eq('condominio_id',CONDO_ID).eq('unidade_id',leaving.id).eq('tipo','inquilino');
+    if(linked.error){flash('Não foi possível verificar os acessos dos moradores: '+linked.error.message);return}
+    for(var linkedResident of linked.data||[]){if(linkedResident.user_id){var revokeResult=await supabase.rpc('revogar_acesso',{_user_id:linkedResident.user_id});if(revokeResult.error){flash('Não foi possível revogar o acesso do morador: '+revokeResult.error.message);return}}}
+    var deleted=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('unidade_id',leaving.id).eq('tipo','inquilino');if(deleted.error){flash('Não foi possível registrar a desocupação: '+deleted.error.message);return}
+    leaving.morador='—';leaving.tel='—';leaving.situacao='Vago';leaving.aluguel=0;leaving.residentIds=[];leaving.residentEmails=[];leaving.residentUsers=[];leaving.contractPath='';leaving.contractName='';leaving.contractStart=null;leaving.contractEnd=null;leaving.pago={};activeUnitId=leaving.id;editingTenant=false;save();await saveQueue;toast('Unidade '+uLabel(leaving)+' marcada como vaga e acessos revogados');return
+  }
   var authButton=e.target.closest('[data-auth-mode]');
   if(authButton){authMode=authMode==='register'?'login':'register';authNotice='';renderAuth();return}
   if(e.target.closest('[data-signout]')){if(portariaCheckTimer)clearInterval(portariaCheckTimer);DB_READY=false;USER=null;CONDO_ID='';supabase.auth.signOut().then(function(){renderAuth()});return}
@@ -601,7 +672,7 @@ document.addEventListener('click',async function(e){
   if(d.copy){f=S.unidades.filter(function(u){return u.id===d.copy})[0];
     var c=cobranca(f);var txt='Olá, '+f.dono+'. Cobrança de '+MES_LABEL+' da unidade '+uLabel(f)+': taxa '+brl(c.taxa)+', água '+brl(c.agua)+', gás '+brl(c.gas)+c.extras.map(function(e){return ', '+e.nome.toLowerCase()+' '+brl(e.valor)}).join('')+(S.config.cobrarAluguel&&c.aluguel?', aluguel '+brl(c.aluguel):'')+'. Total '+brl(c.total)+', vencido em 10/10. Pedimos a regularização. Administração do '+COND+'.';
     try{navigator.clipboard.writeText(txt).then(function(){toast('Mensagem de cobrança copiada')},function(){toast(txt)})}catch(x){toast(txt)}return}
-  if(d.delUnit){var removed=S.unidades.find(function(u){return u.id===d.delUnit});var removedLabel=removed?uLabel(removed):'';var delUnit=await supabase.from('unidades').delete().eq('condominio_id',CONDO_ID).eq('id',d.delUnit);if(delUnit.error){flash('Não foi possível remover a unidade: '+delUnit.error.message);return}S.unidades=S.unidades.filter(function(u){return u.id!==d.delUnit});S.prestadores=S.prestadores.filter(function(x){return x.unidade!==removedLabel});S.veiculos=S.veiculos.filter(function(x){return x.unidade!==removedLabel});S.visitantes=S.visitantes.filter(function(x){return x.unidade!==removedLabel});S.encomendas=S.encomendas.filter(function(x){return x.unidade!==removedLabel});S.chamados=S.chamados.filter(function(x){return x.unidade!==removedLabel});save();toast('Unidade removida');return}
+  if(d.delUnit){var removed=S.unidades.find(function(u){return u.id===d.delUnit});var removedLabel=removed?uLabel(removed):'';var linkedToDelete=await supabase.from('moradores').select('user_id').eq('condominio_id',CONDO_ID).eq('unidade_id',d.delUnit).eq('tipo','inquilino');if(linkedToDelete.error){flash('Não foi possível verificar os acessos dos moradores: '+linkedToDelete.error.message);return}for(var linkedRow of linkedToDelete.data||[]){if(linkedRow.user_id){var revokeDelete=await supabase.rpc('revogar_acesso',{_user_id:linkedRow.user_id});if(revokeDelete.error){flash('Não foi possível revogar o acesso do morador: '+revokeDelete.error.message);return}}}var delUnit=await supabase.from('unidades').delete().eq('condominio_id',CONDO_ID).eq('id',d.delUnit);if(delUnit.error){flash('Não foi possível remover a unidade: '+delUnit.error.message);return}S.unidades=S.unidades.filter(function(u){return u.id!==d.delUnit});S.prestadores=S.prestadores.filter(function(x){return x.unidade!==removedLabel});S.veiculos=S.veiculos.filter(function(x){return x.unidade!==removedLabel});S.visitantes=S.visitantes.filter(function(x){return x.unidade!==removedLabel});S.encomendas=S.encomendas.filter(function(x){return x.unidade!==removedLabel});S.chamados=S.chamados.filter(function(x){return x.unidade!==removedLabel});save();toast('Unidade removida e acessos revogados');return}
   if(d.delDesp){var dd=await supabase.from('despesas_condominio').delete().eq('condominio_id',CONDO_ID).eq('id',d.delDesp);if(dd.error){flash(dd.error.message);return}S.despesas=S.despesas.filter(function(x){return x.id!==d.delDesp});save();toast('Despesa excluída');return}
   if(d.delNot){var dn=await supabase.from('comunicados').delete().eq('condominio_id',CONDO_ID).eq('id',d.delNot);if(dn.error){flash(dn.error.message);return}S.comunicados=S.comunicados.filter(function(x){return x.id!==d.delNot});save();toast('Comunicado excluído');return}
   if(d.ltab){leitTab=d.ltab;render();return}
@@ -614,7 +685,7 @@ document.addEventListener('click',async function(e){
   if(d.pagOk){f=S.pagamentos.filter(function(x){return x.id===d.pagOk})[0];var un=S.unidades.filter(function(x){return x.id===f.unidadeId})[0];if(un)un.pago[f.mes]=true;f.status='Confirmado';save();toast('Pagamento confirmado e fatura baixada');return}
   if(d.pagNo){f=S.pagamentos.filter(function(x){return x.id===d.pagNo})[0];f.status='Recusado';save();toast('Pagamento recusado');return}
   if(d.copyKey){f=S.meios.filter(function(x){return x.id===d.copyKey})[0];var k=(f.dados&&f.dados.chave)||'';try{navigator.clipboard.writeText(k).then(function(){flash('Chave PIX copiada')},function(){flash(k)})}catch(x){flash(k)}return}
-  if(d.informar){f=S.meios.filter(function(x){return x.id===d.informar})[0];registrarPag(f,'Aguardando conferência');toast('Pagamento informado. Aguarde a confirmação do síndico');return}
+  if(d.informar){f=S.meios.filter(function(x){return x.id===d.informar})[0];await registrarPag(f,'Aguardando conferência');if(role==='morador')toast('Pagamento informado. Aguarde a confirmação do síndico');return}
   if(d.mp){flash('A integração real com o Mercado Pago ainda não está conectada. Nenhum pagamento foi processado.');return}
   if(d.endTaxa){f=S.taxas.filter(function(x){return x.id===d.endTaxa})[0];f.fim=MES;save();toast('Taxa encerrada após '+MES_LABEL);return}
   if(d.delTaxa){var dt=await supabase.from('taxas_adicionais').delete().eq('condominio_id',CONDO_ID).eq('id',d.delTaxa);if(dt.error){flash('A taxa não pode ser removida enquanto houver cobranças vinculadas: '+dt.error.message);return}S.taxas=S.taxas.filter(function(x){return x.id!==d.delTaxa});save();toast('Taxa excluída');return}
@@ -624,6 +695,20 @@ document.addEventListener('click',async function(e){
 });
 document.addEventListener('submit',async function(e){
   e.preventDefault();var id=e.target.id, v=function(i){var field=document.getElementById(i);return field?field.value.trim():''};
+  if(id==='f-resident-password'){
+    var newPassword=v('resident-new-password'),confirmPassword=v('resident-confirm-password'),token=pendingInviteToken||inviteTokenFromUrl();
+    if(newPassword.length<8){renderResidentPassword('A senha deve ter pelo menos 8 caracteres.');return}
+    if(newPassword!==confirmPassword){renderResidentPassword('As senhas não são iguais.');return}
+    if(!token){renderAuth();authNotice='Convite não encontrado. Peça ao síndico para enviar um novo acesso.';renderAuth();return}
+    renderLoading('Ativando seu acesso…');
+    try{
+      var updated=await supabase.auth.updateUser({password:newPassword});if(updated.error)throw updated.error;
+      var accepted=await supabase.rpc('aceitar_convite',{_token:token});if(accepted.error)throw accepted.error;
+      await supabase.auth.updateUser({data:{sercon_convite_token:null}});clearInviteTokenFromUrl();pendingInviteToken='';
+      var active=await supabase.auth.getSession();if(active.error)throw active.error;await loadWorkspace(active.data.session);
+    }catch(err){renderResidentPassword(err.message||'Não foi possível ativar o acesso.')}
+    return;
+  }
   if(id==='f-auth'){
     var email=v('a-email'),password=v('a-password'),registering=authMode==='register';
     var meta=registering?{nome:v('a-nome'),condominio_nome:v('a-cond'),condominio_cnpj:v('a-cnpj'),condominio_endereco:v('a-endereco'),condominio_telefone:v('a-telefone'),condominio_email:email,taxa_condominio:Number(v('a-taxa')),vencimento_dia:Number(v('a-venc')),agua_modo:v('a-agua'),valor_m3_agua:Number(v('a-agua-tarifa')),valor_m3_gas:Number(v('a-gas')),criterio_rateio_agua:'fracao_ideal'}:null;
@@ -632,10 +717,10 @@ document.addEventListener('submit',async function(e){
       if(registering){
         var created=await supabase.auth.signUp({email:email,password:password,options:{data:meta}});if(created.error)throw created.error;
         if(!created.data.session){authNotice='Cadastro criado. Confirme o e-mail e depois entre para acessar o condomínio.';authMode='login';renderAuth();return}
-        await loadWorkspace(created.data.session);
+        await enterWorkspace(created.data.session);
       }else{
         var logged=await supabase.auth.signInWithPassword({email:email,password:password});if(logged.error)throw logged.error;
-        await loadWorkspace(logged.data.session);
+        await enterWorkspace(logged.data.session);
       }
     }catch(err){DB_READY=false;USER=null;authNotice=err.message||'Não foi possível acessar o sistema.';renderAuth()}})();return;
   }
@@ -668,7 +753,40 @@ document.addEventListener('submit',async function(e){
     if(saved.error||saved.data&&saved.data.error){flash(saved.data&&saved.data.error||'Não foi possível salvar. Confira se aplicou a migração e publicou a Edge Function.');return}
     await refreshPaymentConfig();render();toast('Forma de pagamento salva');return;
   }
-  if(id==='f-tenant'){var unit=S.unidades.find(function(u){return u.id===e.target.dataset.unitId}),isEditing=!!(unit&&unit.situacao==='Inquilino'&&editingTenant);if(!unit||(unit.situacao!=='Vago'&&!isEditing)){flash('Esta unidade não está disponível para nova locação');return}var names=splitNames(v('n-nomes')),file=document.getElementById('n-contrato').files[0],contractPath=isEditing?(unit.contractPath||''):'';if(!names.length){flash('Informe ao menos um inquilino');return}if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var path=CONDO_ID+'/'+unit.id+'/locacao-'+uid()+'/'+file.name,uploaded=await supabase.storage.from('contratos-locacao').upload(path,file,{upsert:false,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}if(isEditing){var oldTenants=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('unidade_id',unit.id).eq('tipo','inquilino');if(oldTenants.error){flash('Não foi possível atualizar os moradores: '+oldTenants.error.message);return}}unit.morador=names.join(', ');unit.tel=v('n-tel')||'—';unit.situacao='Inquilino';unit.aluguel=parseFloat(v('n-aluguel'))||0;unit.residentIds=[];unit.contractPath=contractPath;unit.contractName=file?file.name:(isEditing?unit.contractName:'');unit.contractStart=v('n-inicio')||null;unit.contractEnd=v('n-fim')||null;editingTenant=false;save();await saveQueue;toast((isEditing?'Dados do inquilino atualizados':'Novo inquilino cadastrado')+' na unidade '+uLabel(unit));return}
+  if(e.target.matches('[data-resident-access-form]')){
+    var accessUnit=S.unidades.find(function(u){return u.id===e.target.dataset.unitId}),residentId=e.target.dataset.residentId;
+    if(!accessUnit||accessUnit.situacao!=='Inquilino'){flash('Cadastre primeiro a locação deste apartamento.');return}
+    accessUnit.residentEmails=accessUnit.residentEmails||[];accessUnit.residentUsers=accessUnit.residentUsers||[];
+    var residentIndex=(accessUnit.residentIds||[]).indexOf(residentId),accessEmail=e.target.querySelector('[name="email"]').value.trim().toLowerCase();
+    if(residentIndex<0){flash('Não foi possível localizar o morador neste apartamento.');return}
+    if((accessUnit.residentUsers||[])[residentIndex]){flash('Este morador já tem acesso ativo ao aplicativo.');return}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accessEmail)){flash('Informe um e-mail válido para o acesso.');return}
+    var emailSaved=await supabase.from('moradores').update({email:accessEmail}).eq('condominio_id',CONDO_ID).eq('unidade_id',accessUnit.id).eq('id',residentId);
+    if(emailSaved.error){flash('Não foi possível salvar o e-mail do morador: '+emailSaved.error.message);return}
+    accessUnit.residentEmails[residentIndex]=accessEmail;renderLoading('Enviando o convite de acesso…');
+    var accessInvite=await supabase.functions.invoke('morador-acesso',{body:{action:'invite',moradorId:residentId}});
+    if(accessInvite.error||accessInvite.data&&accessInvite.data.error){await loadWorkspace({user:USER});flash('E-mail salvo, mas o convite não foi enviado: '+(accessInvite.data&&accessInvite.data.error||accessInvite.error.message));return}
+    if(accessInvite.data&&accessInvite.data.requiresExistingLogin&&accessInvite.data.token){RESIDENT_INVITES[residentId]=true;var inviteUrl=new URL(location.href);inviteUrl.searchParams.set('convite',accessInvite.data.token);inviteUrl.hash='';try{await navigator.clipboard.writeText(inviteUrl.toString());await loadWorkspace({user:USER});flash('Este e-mail já tem conta. Link para vincular o apartamento copiado; envie-o ao morador.')}catch(copyError){await loadWorkspace({user:USER});window.prompt('Copie e envie este link ao morador:',inviteUrl.toString())}return}
+    RESIDENT_INVITES[residentId]=true;await loadWorkspace({user:USER});toast('Convite de acesso enviado para '+accessEmail);return;
+  }
+  if(id==='f-tenant'){
+    var unit=S.unidades.find(function(u){return u.id===e.target.dataset.unitId}),isEditing=!!(unit&&unit.situacao==='Inquilino'&&editingTenant);
+    if(!unit||(unit.situacao!=='Vago'&&!isEditing)){flash('Esta unidade não está disponível para nova locação');return}
+    var names=splitNames(v('n-nomes')),file=document.getElementById('n-contrato').files[0];
+    if(!names.length){flash('Informe ao menos um inquilino');return}
+    var oldIds=unit.residentIds||[],oldEmails=unit.residentEmails||[],oldUsers=unit.residentUsers||[];
+    var contractPath=isEditing?(unit.contractPath||''):'';
+    if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var path=CONDO_ID+'/'+unit.id+'/locacao-'+uid()+'/'+file.name,uploaded=await supabase.storage.from('contratos-locacao').upload(path,file,{upsert:false,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}
+    for(var j=names.length;j<oldIds.length;j++){
+      if(oldUsers[j]){var revoked=await supabase.rpc('revogar_acesso',{_user_id:oldUsers[j]});if(revoked.error){flash('Não foi possível revogar o acesso de '+(splitNames(unit.morador)[j]||'um morador')+': '+revoked.error.message);return}}
+      var removed=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('id',oldIds[j]);if(removed.error){flash('Não foi possível remover o cadastro do morador: '+removed.error.message);return}
+    }
+    unit.morador=names.join(', ');unit.tel=v('n-tel')||'—';unit.situacao='Inquilino';unit.aluguel=parseFloat(v('n-aluguel'))||0;
+    unit.residentIds=names.map(function(_,i){return oldIds[i]||uid()});unit.residentEmails=names.map(function(_,i){return oldEmails[i]||''});unit.residentUsers=names.map(function(_,i){return oldUsers[i]||''});
+    unit.contractPath=contractPath;unit.contractName=file?file.name:(isEditing?unit.contractName:'');unit.contractStart=v('n-inicio')||null;unit.contractEnd=v('n-fim')||null;
+    editingTenant=false;try{await saveQueue;await persistWorkspace()}catch(persistError){flash('Não foi possível salvar os dados do inquilino: '+(persistError.message||persistError));return}render();
+    toast('Locação salva. O acesso ao aplicativo pode ser cadastrado na seção separada abaixo.');return
+  }
   if(id==='f-unit'){var dono=v('u-dono'),situacao=v('u-sit'),morador=v('u-morador')||(situacao==='Proprietário residente'?dono:'');if(situacao==='Inquilino'&&!morador){flash('Informe ao menos um inquilino');return}var vagas=Array.from(new Set(v('u-vagas').split(',').map(function(x){return x.trim()}).filter(Boolean))),unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+file.name,file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}S.unidades.push({id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:v('u-tel')||'—',situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||'',parkingSpaces:vagas});unitTab='apartamentos';activeBlock=v('u-bloco').toUpperCase();save();toast('Unidade cadastrada')}
   else if(id==='f-config'){S.config.taxaCondominio=parseFloat(v('cfg-taxa'))||0;S.config.vencimentoDia=parseInt(v('cfg-venc'),10)||10;S.unidades.forEach(function(u){u.taxa=S.config.taxaCondominio});save();toast('Taxa padrão salva e cobranças atualizadas')}
   else if(id==='f-agua'){var bad=saveReads('agua','aa-','ab-');if(bad){flash('A leitura atual da unidade '+bad+' não pode ser menor que a leitura anterior');return}S.config.contaMes[MES]=parseFloat(v('c-agua'))||0;S.config.tarifaAgua=parseFloat(v('c-agua-tarifa'))||0;S.config.modoAgua=v('c-modo');save();toast('Água salva e cobrança recalculada')}
@@ -693,14 +811,14 @@ document.addEventListener('submit',async function(e){
   else if(id==='f-vis'){S.visitantes.push({id:uid(),nome:v('v-nome'),doc:v('v-doc')||'—',unidade:v('v-un'),entrada:now(),saida:''});save();toast('Entrada registrada')}
   else if(id==='f-enc'){S.encomendas.push({id:uid(),unidade:v('e-un'),transp:v('e-tr'),chegada:now(),retirada:''});save();toast('Encomenda registrada')}
   else if(id==='f-not'){S.comunicados.push({id:uid(),titulo:v('n-tit'),texto:v('n-txt'),data:now().slice(0,10)});save();toast('Comunicado publicado')}
-  else if(id==='f-ch'){var un=role==='morador'?MY:v('c-un');S.chamados.push({id:uid(),unidade:un,titulo:v('c-tit'),status:'Aberto',data:now().slice(0,10)});save();toast('Chamado aberto')}
+  else if(id==='f-ch'){var un=role==='morador'?MY:v('c-un');if(role==='morador'){var ticket=await supabase.from('chamados').insert({condominio_id:CONDO_ID,unidade_id:S.unidades[0].id,titulo:v('c-tit'),descricao:v('c-tit'),categoria:'outros',prioridade:'media',status:'aberto',aberto_por:USER.id}).select().single();if(ticket.error){flash('Não foi possível abrir o chamado: '+ticket.error.message);return}S.chamados.unshift({id:ticket.data.id,unidade:un,titulo:ticket.data.titulo,status:'Aberto',data:(ticket.data.criado_em||'').slice(0,10)});render();toast('Chamado aberto')}else{S.chamados.push({id:uid(),unidade:un,titulo:v('c-tit'),status:'Aberto',data:now().slice(0,10)});save();toast('Chamado aberto')}}
 });
 render();
 if(supabase){
   supabase.auth.getSession().then(function(result){
     if(result.error){authNotice=result.error.message;renderAuth();return}
-    if(result.data.session){renderLoading('Carregando dados do condomínio…');loadWorkspace(result.data.session).catch(function(err){DB_READY=false;USER=null;authNotice=err.message||'Falha ao carregar o condomínio.';renderAuth()})}
-    else renderAuth();
+    if(result.data.session){renderLoading('Carregando dados do condomínio…');enterWorkspace(result.data.session).catch(function(err){DB_READY=false;USER=null;authNotice=err.message||'Falha ao carregar o condomínio.';renderAuth()})}
+    else{if(inviteTokenFromUrl())authNotice='Entre com o mesmo e-mail que recebeu o convite para ativar o acesso.';renderAuth()}
   });
   supabase.auth.onAuthStateChange(function(event){
     if(event==='SIGNED_OUT'){DB_READY=false;USER=null;CONDO_ID='';renderAuth()}

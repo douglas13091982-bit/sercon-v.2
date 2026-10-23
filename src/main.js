@@ -84,15 +84,17 @@ function shell(){
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
 
 var authMode='register', authNotice='';
+function setShell(on){var app=document.getElementById('app');if(app)app.className=on?'shell':'auth'}
 function renderAuth(){
   var app=document.getElementById('app');
+  setShell(false);
   if(!supabase){app.innerHTML='<main class="panel"><h2>Conectar o Supabase</h2><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY no ambiente do projeto para habilitar cadastro e salvamento.</p></main>';return}
   var reg=authMode==='register';
   app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com o e-mail e a senha do síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
   '<form class="f" id="f-auth">'+(reg?'<label>Seu nome<input id="a-nome" required autocomplete="name"></label><label>Nome do condomínio<input id="a-cond" required></label><label>CNPJ (opcional)<input id="a-cnpj" inputmode="numeric"></label><label class="wide">Endereço (opcional)<input id="a-endereco" autocomplete="street-address"></label><label>Telefone do condomínio<input id="a-telefone" type="tel"></label><label>Condomínio mensal padrão (R$)<input id="a-taxa" type="number" min="0" step="0.01" value="0" required></label><label>Vencimento da cobrança (dia)<input id="a-venc" type="number" min="1" max="28" value="10" required></label><label>Água<select id="a-agua"><option value="rateio">Rateio da conta do condomínio</option><option value="individual">Medidor e cobrança individual</option></select></label><label>Tarifa água (R$/m³)<input id="a-agua-tarifa" type="number" min="0" step="0.0001" value="0"></label><label>Tarifa gás (R$/m³)<input id="a-gas" type="number" min="0" step="0.0001" value="0"></label>':'')+
   '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button></div></main>';
 }
-function renderLoading(message){document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
+function renderLoading(message){setShell(false);document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
 function dbRows(table){return supabase.from(table).select('*').then(function(r){if(r.error)throw r.error;return r.data||[]})}
 async function loadWorkspace(session){
   USER=session.user;
@@ -469,6 +471,7 @@ function render(){
   if(!supabase){renderAuth();return}
   if(!DB_READY){renderAuth();return}
   var a=document.activeElement, id=a&&a.id;
+  setShell(true);
   document.getElementById('app').innerHTML=shell();
   if(id==='mes'){var el=document.getElementById(id);if(el)el.focus()}
 }

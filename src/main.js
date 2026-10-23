@@ -28,7 +28,7 @@ var S=seed();
 var saveQueue=Promise.resolve();
 function save(){if(DB_READY&&!DEMO)saveQueue=saveQueue.catch(function(){}).then(persistWorkspace).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
 
-var role='sindico', view='dashboard', toastMsg='';
+var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas';
 var MY='A-302';
 var NAV={
   sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['pagamentos','Meios de pagamento'],['leituras','Leituras e rateios'],['portaria','Portaria'],['comunicacao','Comunicados e chamados']],
@@ -248,16 +248,18 @@ function vFin(){
   var cob=S.unidades.map(function(u){var p=paid(u),c=cobranca(u);return '<tr><td class="num"><b>'+uLabel(u)+'</b></td><td>'+esc(u.dono)+'</td><td class="num">'+brl(c.taxa)+'</td><td class="num">'+brl(c.agua)+'</td><td class="num">'+brl(c.gas)+'</td>'+tdTaxas(u)+'<td class="num">'+(c.aluguel?brl(c.aluguel):'—')+'</td><td class="num"><b>'+brl(c.total)+'</b></td><td><span class="pill '+(p?'ok':MES>'2026-10'?'warn':'bad')+'">'+(p?'Pago':MES>'2026-10'?'A vencer':'Em atraso')+'</span></td><td><div class="row-actions">'+
     (p?'<button class="btn sm ghost" data-unpay="'+u.id+'">Estornar</button>':'<button class="btn sm" data-pay="'+u.id+'">Marcar como pago</button><button class="btn sm ghost" data-copy="'+u.id+'">Copiar cobrança</button>')+'</div></td></tr>'}).join('');
   var dsp=despMes().slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(d){return '<tr><td class="num">'+fmtD(d.data)+'</td><td>'+esc(d.desc)+'</td><td><span class="pill mute">'+esc(d.cat)+'</span></td><td class="num">'+brl(d.valor)+'</td><td><button class="btn sm danger" data-del-desp="'+d.id+'">Excluir</button></td></tr>'}).join('');
-  return head('Financeiro',MES_LABEL+' · vencimento no dia '+Number(S.config.vencimentoDia||10))+
-  '<div class="panel"><h3>Cobranças automáticas</h3><p class="note">O sistema calcula taxa padrão, água, gás, taxas adicionais vigentes e aluguel quando configurado. Recalcular é seguro: lançamentos pagos são preservados.</p><button class="btn" data-generate-bills>Gerar/recalcular cobranças de '+esc(MES_LABEL)+'</button></div>'+
-  '<div class="panel"><h3>Cobranças do mês</h3><p class="note"><label for="c-alu-fin">Aluguel na cobrança: </label><select id="c-alu-fin" style="width:auto"><option value="nao'+(!S.config.cobrarAluguel?'" selected':'"')+'>Repasse ao proprietário (fora do total)</option><option value="sim'+(S.config.cobrarAluguel?'" selected':'"')+'>Somar ao total a pagar</option></select></p><div class="tablewrap"><table><thead><tr><th>Unidade</th><th>Responsável</th><th>Taxa</th><th>Água</th><th>Gás</th>'+thTaxas()+'<th>Aluguel</th><th>Total a pagar</th><th>Situação</th><th></th></tr></thead><tbody>'+cob+'</tbody></table></div></div>'+
-  '<div class="panel"><h3>Despesas do condomínio</h3><form class="f" id="f-desp">'+
+  var tabs=[['cobrancas','Cobranças do mês'],['despesas','Despesas do condomínio']];
+  var tabBar='<div class="subtabs" role="tablist" aria-label="Seções do financeiro">'+tabs.map(function(t){return '<button type="button" role="tab" data-ftab="'+t[0]+'" aria-selected="'+(t[0]===financeTab)+'">'+t[1]+'</button>'}).join('')+'</div>';
+  var cobrancas='<div class="panel"><h3>Cobranças automáticas</h3><p class="note">O sistema calcula taxa padrão, água, gás, taxas adicionais vigentes e aluguel quando configurado. Recalcular é seguro: lançamentos pagos são preservados.</p><button class="btn" data-generate-bills>Gerar/recalcular cobranças de '+esc(MES_LABEL)+'</button></div>'+
+  '<div class="panel"><h3>Cobranças de '+esc(MES_LABEL)+'</h3><p class="note"><label for="c-alu-fin">Aluguel na cobrança: </label><select id="c-alu-fin" style="width:auto"><option value="nao'+(!S.config.cobrarAluguel?'" selected':'"')+'>Repasse ao proprietário (fora do total)</option><option value="sim'+(S.config.cobrarAluguel?'" selected':'"')+'>Somar ao total a pagar</option></select></p><div class="tablewrap"><table><thead><tr><th>Unidade</th><th>Responsável</th><th>Taxa</th><th>Água</th><th>Gás</th>'+thTaxas()+'<th>Aluguel</th><th>Total a pagar</th><th>Situação</th><th></th></tr></thead><tbody>'+cob+'</tbody></table></div></div>';
+  var despesas='<div class="panel"><h3>Lançar despesa</h3><form class="f" id="f-desp">'+
    '<label>Descrição<input id="d-desc" required></label>'+
    '<label>Categoria<select id="d-cat"><option>Pessoal</option><option>Consumo</option><option>Manutenção</option><option>Serviços</option><option>Reserva</option></select></label>'+
    '<label>Valor (R$)<input id="d-valor" type="number" min="0.01" step="0.01" required></label>'+
    '<label>Data<input id="d-data" type="date" required value="'+MES+'-15"></label>'+
-   '<button class="btn" type="submit">Lançar</button></form>'+
-  '<div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>'+dsp+'</tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td class="num"><b>'+brl(totalDespesas())+'</b></td><td></td></tr></tfoot></table></div></div>';
+   '<button class="btn" type="submit">Lançar despesa</button></form></div>'+
+  '<div class="panel"><h3>Despesas do condomínio · '+esc(MES_LABEL)+'</h3><div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>'+dsp+'</tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td class="num"><b>'+brl(totalDespesas())+'</b></td><td></td></tr></tfoot></table></div></div>';
+  return head('Financeiro',MES_LABEL+' · vencimento no dia '+Number(S.config.vencimentoDia||10))+tabBar+(financeTab==='despesas'?despesas:cobrancas);
 }
 
 function vTaxas(){
@@ -494,6 +496,7 @@ document.addEventListener('change',function(e){
   if(e.target.id==='p-tipo'){var tp=e.target.value;document.querySelectorAll('#f-meio [data-tipos]').forEach(function(el){el.hidden=el.dataset.tipos.split(' ').indexOf(tp)<0})}
 });
 document.addEventListener('click',async function(e){
+  var financeTabButton=e.target.closest('[data-ftab]');if(financeTabButton){financeTab=financeTabButton.dataset.ftab;render();return}
   if(e.target.closest('[data-demo-access]')){loadDemo();return}
   if(DEMO){var demoNav=e.target.closest('[data-nav]');if(demoNav){view=demoNav.dataset.nav;render();return}if(e.target.closest('[data-signout]')){DEMO=false;DB_READY=false;USER=null;CONDO_ID='';COND='';S=seed();renderAuth();return}if(e.target.closest('button'))flash('A demonstração é somente para consulta. As alterações não serão salvas.');return}
   var authButton=e.target.closest('[data-auth-mode]');

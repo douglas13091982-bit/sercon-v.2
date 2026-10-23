@@ -157,6 +157,17 @@ form.f label.chk{flex-direction:row;align-items:center;gap:6px;color:var(--fg);f
 .resident-news>div{min-width:0}
 .resident-news b{display:block;margin-top:3px}
 .resident-news p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.payment-mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.payment-mode-choice{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px!important;padding:13px;background:var(--surface);border:1px solid var(--line);border-radius:11px;cursor:pointer}
+.payment-mode-choice input{width:auto;margin:3px 0 0;accent-color:var(--accent)}
+.payment-mode-choice span{display:grid;gap:3px;color:var(--fg)}
+.payment-mode-choice small{color:var(--muted);font-size:12px}
+.payment-config-section{padding:15px;background:var(--surface-2);border-radius:11px}
+.payment-config-section h4{margin:0 0 12px;font-family:var(--font-display);font-size:15px}
+.payment-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.payment-fields label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.payment-fields .wide{grid-column:1/-1}
+.payment-checks{margin:12px 0}
 @media(max-width:820px){
   #app.resident-app{display:block;max-width:600px;min-height:100dvh;margin:0 auto}
   #app.resident-app>aside{display:none}
@@ -185,6 +196,7 @@ form.f label.chk{flex-direction:row;align-items:center;gap:6px;color:var(--fg);f
   #app.resident-app .resident-bottom-nav svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   #app.resident-app .resident-bottom-nav button:hover{background:var(--surface-2);color:var(--fg)}
 }
+@media(max-width:600px){.payment-mode-options,.payment-fields{grid-template-columns:minmax(0,1fr)}.payment-fields .wide{grid-column:auto}}
 @media(max-width:360px){#app.resident-app .resident-bottom-nav button{font-size:9px}#app.resident-app .resident-bottom-nav svg{width:18px;height:18px}}
 </style>
 

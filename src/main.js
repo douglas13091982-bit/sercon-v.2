@@ -14,7 +14,7 @@ var fmtD=function(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]};
 
 function seed(){return {config:{tarifaGas:0,tarifaAgua:0,taxaCondominio:0,vencimentoDia:10,contaAgua:0,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}},prestadores:[],veiculos:[],meios:[],pagamentos:[],taxas:[],unidades:[],historico:[],despesas:[],visitantes:[],encomendas:[],comunicados:[],chamados:[]}}
 function loadDemo(demoRole){
-  DEMO=true;DB_READY=true;role=demoRole==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';COND='Residencial Jardim das Flores';CONDO_ID='demo';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};MY='A-101';setMes(MES);S=seed();
+  DEMO=true;DB_READY=true;MP_CONFIG={mode:'pix',method:null,mercadoPago:{publicKey:'',pix:true,cartao:true,boleto:true,hasAccessToken:false}};MP_CONFIG_ERROR='';role=demoRole==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';COND='Residencial Jardim das Flores';CONDO_ID='demo';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};MY='A-101';setMes(MES);S=seed();
   S.config={tarifaGas:7.5,tarifaAgua:0,taxaCondominio:320,vencimentoDia:10,contaAgua:780,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}};S.config.contaMes[MES]=780;S.config.tarifaMes[MES]=7.5;
   var unit=function(id,bloco,apto,dono,morador,tel,situacao,aluguel,gas,agua,pago){var u={id:id,bloco:bloco,apto:apto,dono:dono,morador:morador,tel:tel,situacao:situacao,taxa:320,aluguel:aluguel,leituras:{},pago:{},gasMeter:'G-'+apto,waterMeter:'A-'+apto,parkingSpaces:[]};u.leituras[MES]={gas:[gas-5,gas],agua:[agua-4,agua]};if(pago)u.pago[MES]=true;return u};
   S.unidades=[unit('demo-a101','A','101','Marcos Silva','João e Ana Lima','(47) 99911-2233','Inquilino',1600,42,36,false),unit('demo-a102','A','102','Carla Souza','Carla Souza','(47) 99922-3344','Proprietário residente',0,31,28,true),unit('demo-a103','A','103','Paulo Mendes','—','(47) 99933-4455','Vago',0,0,0,false),unit('demo-b201','B','201','Renata Costa','Renata Costa','(47) 99944-5566','Proprietário residente',0,28,23,false),unit('demo-b202','B','202','Luiz Ferreira','Pedro Alves','(47) 99955-6677','Inquilino',1350,37,31,false),unit('demo-c301','C','301','Fernanda Rocha','Fernanda Rocha','(47) 99966-7788','Proprietário residente',0,34,26,true)];
@@ -23,10 +23,19 @@ function loadDemo(demoRole){
   S.despesas=[{id:'demo-d1',desc:'Manutenção do elevador',cat:'Manutenção',valor:680,data:MES+'-05',fornecedor:'Elevatec'},{id:'demo-d2',desc:'Limpeza das áreas comuns',cat:'Serviços',valor:420,data:MES+'-11',fornecedor:'Equipe Limpa'}];
   S.visitantes=[{id:'demo-v1',nome:'Roberto Almeida',doc:'***.***.***-12',unidade:'A-101',entrada:now(),saida:''}];S.encomendas=[{id:'demo-e1',unidade:'B-202',transp:'Correios',chegada:now(),retirada:'',avisado:''}];
   S.chamados=[{id:'demo-c1',unidade:'A-102',titulo:'Lâmpada queimada no corredor',status:'Aberto',data:MES+'-09'},{id:'demo-c2',unidade:'B-202',titulo:'Verificar vazamento na cozinha',status:'Em andamento',data:MES+'-12'}];S.comunicados=[{id:'demo-n1',titulo:'Limpeza da caixa d’água',texto:'A limpeza será realizada na próxima terça-feira, das 9h às 12h.',data:MES+'-02'}];
-  S.meios=[{id:'demo-m1',nome:'PIX do condomínio',tipo:'pix',ativo:true,dados:{chave:'financeiro@jardimdasflores.com.br',favorecido:'Residencial Jardim das Flores'},instrucoes:'Após pagar, informe o pagamento para conferência.'},{id:'demo-mp',nome:'Mercado Pago',tipo:'mercadopago',ativo:true,dados:{email:'financeiro@jardimdasflores.com.br',pix:true,cartao:true,boleto:true},instrucoes:'Opção ilustrativa; a demonstração não processa pagamentos.'}];S.pagamentos=[{id:'demo-p1',unidadeId:'demo-b202',unidade:'B-202',mes:MES,valor:410,meio:'PIX',data:now(),status:'Aguardando conferência'}];S.historico=[['Mai',2800,1050],['Jun',3120,980],['Jul',2950,1210],['Ago',3280,920],['Set',3050,1140],['Out',3260,1100]];render();
+  S.meios=[{id:'demo-m1',nome:'PIX do condomínio',tipo:'pix',ativo:true,dados:{chave:'financeiro@jardimdasflores.com.br',favorecido:'Residencial Jardim das Flores'},instrucoes:'Após pagar, informe o pagamento para conferência.'},{id:'demo-mp',nome:'Mercado Pago',tipo:'mercadopago',ativo:false,dados:{publicKey:'APP_USR-demonstração',pix:true,cartao:true,boleto:true},instrucoes:'Opção ilustrativa; a demonstração não processa pagamentos.'}];S.pagamentos=[{id:'demo-p1',unidadeId:'demo-b202',unidade:'B-202',mes:MES,valor:410,meio:'PIX',data:now(),status:'Aguardando conferência'}];S.historico=[['Mai',2800,1050],['Jun',3120,980],['Jul',2950,1210],['Ago',3280,920],['Set',3050,1140],['Out',3260,1100]];render();
 }
 var S=seed();
 var saveQueue=Promise.resolve();
+var MP_CONFIG={mode:null,method:null,mercadoPago:{publicKey:'',pix:true,cartao:true,boleto:true,hasAccessToken:false}}, MP_CONFIG_ERROR='';
+async function refreshPaymentConfig(){
+  if(!supabase||!USER)return;
+  var result=await supabase.functions.invoke('payment-config',{body:{action:'get'}});
+  if(result.error){MP_CONFIG={mode:null,method:null,mercadoPago:{publicKey:'',pix:true,cartao:true,boleto:true,hasAccessToken:false}};MP_CONFIG_ERROR='A configuração segura de pagamentos ainda não está disponível. Aplique a migração e publique a Edge Function payment-config.';return}
+  MP_CONFIG_ERROR='';MP_CONFIG=result.data||MP_CONFIG;
+  if(MP_CONFIG.method){var m=MP_CONFIG.method;S.meios=[{id:m.id,nome:m.nome,tipo:m.tipo,ativo:true,dados:m.dados_publicos||{},instrucoes:m.instrucoes||''}]}
+  else S.meios=[];
+}
 function save(){if(DB_READY&&!DEMO)saveQueue=saveQueue.catch(function(){}).then(persistWorkspace).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
 
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas', unitTab='apartamentos', activeBlock='', activeUnitId='', editingTenant=false;
@@ -308,32 +317,23 @@ var TIPOS={pix:'PIX',transferencia:'Transferência bancária',boleto:'Boleto',di
 function meioResumo(m){var d=m.dados||{};
   if(m.tipo==='pix')return esc((d.tipoChave||'Chave')+': '+(d.chave||'—')+(d.favorecido?' · '+d.favorecido:''));
   if(m.tipo==='transferencia')return esc((d.banco||'Banco')+' · ag. '+(d.agencia||'—')+' · conta '+(d.conta||'—')+(d.favorecido?' · '+d.favorecido:''));
-  if(m.tipo==='mercadopago'){var f=[['pix','PIX'],['cartao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Conta '+(d.email||'—')+' · aceita '+(f||'—'))}
+  if(m.tipo==='mercadopago'){var f=[['pix','Pix'],['cartao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
   return esc(m.instrucoes||'—')}
 function g(tipos,html){return '<label data-tipos="'+tipos+'"'+(tipos.split(' ').indexOf('pix')<0?' hidden':'')+'>'+html+'</label>'}
 function vPag(inFinance){
-  var linhas=S.meios.map(function(m){var mp=m.tipo==='mercadopago';
-    return '<tr><td><b>'+esc(m.nome)+'</b></td><td><span class="pill mute">'+TIPOS[m.tipo]+'</span>'+(mp?' <span class="pill warn">Demonstração</span>':'')+'</td><td>'+meioResumo(m)+'</td><td><span class="pill '+(m.ativo?'ok':'mute')+'">'+(m.ativo?'Ativo':'Desativado')+'</span></td><td><div class="row-actions"><button class="btn sm ghost" data-meio-toggle="'+m.id+'">'+(m.ativo?'Desativar':'Ativar')+'</button><button class="btn sm danger" data-del-meio="'+m.id+'">Excluir</button></div></td></tr>'}).join('');
+  var active=S.meios.find(function(m){return m.ativo}),mode=MP_CONFIG.mode||(active?active.tipo:null)||'pix';
+  var pix=active&&active.tipo==='pix'?active.dados||{}:{};
+  var mp=MP_CONFIG.mercadoPago||{},mpData=active&&active.tipo==='mercadopago'?active.dados||{}:{};
+  var linhas=active?'<tr><td><span class="pill mute">'+TIPOS[active.tipo]+'</span></td><td>'+meioResumo(active)+'</td><td><span class="pill ok">Ativo</span></td></tr>':'';
   var infos=S.pagamentos.slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(x){var cls=x.status==='Confirmado'?'ok':x.status==='Recusado'?'bad':'warn';
     return '<tr><td class="num">'+fmtDT(x.data)+'</td><td class="num">'+esc(x.unidade)+'</td><td>'+mesLabel(x.mes)+'</td><td class="num">'+brl(x.valor)+'</td><td>'+esc(x.meio)+'</td><td><span class="pill '+cls+'">'+x.status+'</span></td><td>'+(x.status==='Aguardando conferência'?'<div class="row-actions"><button class="btn sm" data-pag-ok="'+x.id+'">Confirmar</button><button class="btn sm danger" data-pag-no="'+x.id+'">Recusar</button></div>':'')+'</td></tr>'}).join('');
-  var tipoOpts=Object.keys(TIPOS).map(function(k){return '<option value="'+k+'">'+TIPOS[k]+'</option>'}).join('');
   return (inFinance?'':head('Meios de pagamento','Como os moradores pagam as faturas: manual ou pelo Mercado Pago'))+
-  '<div class="panel"><h3>Novo meio de pagamento</h3><form class="f" id="f-meio">'+
-   '<label>Nome exibido ao morador<input id="p-nome" required placeholder="PIX do condomínio"></label>'+
-   '<label>Tipo<select id="p-tipo">'+tipoOpts+'</select></label>'+
-   g('pix','Tipo da chave<select id="p-tipochave"><option>CNPJ</option><option>CPF</option><option>E-mail</option><option>Telefone</option><option>Chave aleatória</option></select>')+
-   g('pix','Chave PIX<input id="p-chave">')+
-   g('pix transferencia','Favorecido<input id="p-fav">')+
-   g('transferencia','Banco<input id="p-banco">')+
-   g('transferencia','Agência<input id="p-ag">')+
-   g('transferencia','Conta<input id="p-conta">')+
-   g('mercadopago','E-mail da conta Mercado Pago<input id="p-mpmail" type="email">')+
-   g('mercadopago','Public Key (opcional)<input id="p-mppk" placeholder="APP_USR-...">')+
-   '<div class="wide" data-tipos="mercadopago" hidden><span style="font-size:12px;color:var(--muted)">Formas aceitas no Mercado Pago</span><div class="checks"><label class="chk"><input type="checkbox" id="p-mp-pix" checked>PIX</label><label class="chk"><input type="checkbox" id="p-mp-cartao" checked>Cartão</label><label class="chk"><input type="checkbox" id="p-mp-boleto" checked>Boleto</label></div></div>'+
-   '<label class="wide">Instruções ao morador<textarea id="p-instr" rows="2" placeholder="Como pagar, horários, prazo para enviar o comprovante"></textarea></label>'+
-   '<button class="btn" type="submit">Cadastrar meio de pagamento</button></form>'+
-  '<p class="note"><b>Mercado Pago:</b> nesta demonstração o pagamento é simulado e nenhuma credencial é pedida. Na versão com servidor, a cobrança é criada com o Access Token do condomínio guardado no servidor, nunca digitado nesta tela, e o Mercado Pago avisa o sistema quando o morador paga, baixando a fatura sozinho.</p>'+
-  '<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Dados</th><th>Situação</th><th></th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5" class="empty">Nenhum meio de pagamento cadastrado.</td></tr>')+'</tbody></table></div></div>'+
+  '<div class="panel"><h3>Forma de pagamento do condomínio</h3><p class="note">Escolha apenas uma opção. A outra ficará desativada para os moradores.</p><form class="f" id="f-payment-config">'+
+   '<div class="wide payment-mode-options"><label class="payment-mode-choice"><input type="radio" name="payment-mode" id="pay-mode-pix" value="pix"'+(mode==='pix'?' checked':'')+'><span><b>Pix manual</b><small>O morador paga pela chave e informa o pagamento para conferência.</small></span></label><label class="payment-mode-choice"><input type="radio" name="payment-mode" id="pay-mode-mp" value="mercadopago"'+(mode==='mercadopago'?' checked':'')+'><span><b>Mercado Pago</b><small>Checkout com Pix, cartão e boleto habilitados.</small></span></label></div>'+
+   '<div class="wide payment-config-section" data-payment-section="pix"'+(mode==='pix'?'':' hidden')+'><h4>Dados do Pix manual</h4><div class="payment-fields"><label>Tipo da chave<select id="p-tipochave"><option'+(pix.tipoChave==='CNPJ'?' selected':'')+'>CNPJ</option><option'+(pix.tipoChave==='CPF'?' selected':'')+'>CPF</option><option'+(pix.tipoChave==='E-mail'?' selected':'')+'>E-mail</option><option'+(pix.tipoChave==='Telefone'?' selected':'')+'>Telefone</option><option'+(pix.tipoChave==='Chave aleatória'?' selected':'')+'>Chave aleatória</option></select></label><label>Chave Pix<input id="p-chave" value="'+esc(pix.chave||'')+'" placeholder="Chave Pix do condomínio"></label><label class="wide">Nome do favorecido<input id="p-fav" value="'+esc(pix.favorecido||'')+'" placeholder="Razão social ou titular"></label><label class="wide">Instruções ao morador<textarea id="p-instr-pix" rows="2" placeholder="Prazo e como informar o pagamento">'+esc(active&&active.tipo==='pix'?active.instrucoes||'':'')+'</textarea></label></div></div>'+
+   '<div class="wide payment-config-section" data-payment-section="mercadopago"'+(mode==='mercadopago'?'':' hidden')+'><h4>Credenciais do Mercado Pago</h4><div class="payment-fields"><label>Public Key<input id="p-mppk" value="'+esc(mp.publicKey||mpData.publicKey||'')+'" placeholder="APP_USR-..." autocomplete="off"></label><label>Access Token<input id="p-mptoken" type="password" value="" placeholder="'+(mp.hasAccessToken?'Token salvo · deixe em branco para manter':'APP_USR-...')+'" autocomplete="new-password"></label></div><div class="checks payment-checks"><label class="chk"><input type="checkbox" id="p-mp-pix"'+(mp.pix!==false?' checked':'')+'>Pix</label><label class="chk"><input type="checkbox" id="p-mp-cartao"'+(mp.cartao!==false?' checked':'')+'>Cartão</label><label class="chk"><input type="checkbox" id="p-mp-boleto"'+(mp.boleto!==false?' checked':'')+'>Boleto</label></div><p class="note">O Access Token é validado no Mercado Pago e cifrado no servidor. Ele não fica salvo no navegador nem é exibido novamente. A Public Key é pública e pode ser visualizada.</p></div>'+
+   (MP_CONFIG_ERROR?'<p class="wide pill warn">'+esc(MP_CONFIG_ERROR)+'</p>':'')+'<button class="btn" type="submit">Salvar forma de pagamento</button></form>'+
+  '<h3 style="margin-top:20px">Meio ativo para os moradores</h3><div class="tablewrap"><table><thead><tr><th>Tipo</th><th>Dados exibidos</th><th>Situação</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="3" class="empty">Nenhuma forma de pagamento configurada.</td></tr>')+'</tbody></table></div></div>'+
   '<div class="panel"><h3>Pagamentos informados pelos moradores</h3><div class="tablewrap"><table><thead><tr><th>Data</th><th>Unidade</th><th>Mês</th><th>Valor</th><th>Meio</th><th>Situação</th><th></th></tr></thead><tbody>'+(infos||'<tr><td colspan="7" class="empty">Nenhum pagamento informado ainda.</td></tr>')+'</tbody></table></div></div>';
 }
 function registrarPag(m,status){var u=unitByLabel(MY)||S.unidades[0],c=cobranca(u);
@@ -536,7 +536,7 @@ document.addEventListener('change',function(e){
   if(e.target.id==='my-unit'&&role!=='morador'){MY=e.target.value;render()}
   if(e.target.id==='demo-role'&&DEMO){role=e.target.value==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';MY='A-101';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};render()}
   if(e.target.id==='c-alu-fin'){S.config.cobrarAluguel=e.target.value==='sim';save();render()}
-  if(e.target.id==='p-tipo'){var tp=e.target.value;document.querySelectorAll('#f-meio [data-tipos]').forEach(function(el){el.hidden=el.dataset.tipos.split(' ').indexOf(tp)<0})}
+  if(e.target.name==='payment-mode'){document.querySelectorAll('[data-payment-section]').forEach(function(el){el.hidden=el.dataset.paymentSection!==e.target.value})}
 });
 document.addEventListener('click',async function(e){
   if(e.target.matches('[data-unit-modal-backdrop]')){closeUnitModal();return}
@@ -605,6 +605,24 @@ document.addEventListener('submit',async function(e){
     }catch(err){DB_READY=false;USER=null;authNotice=err.message||'Não foi possível acessar o sistema.';renderAuth()}})();return;
   }
   if(DEMO){flash('A demonstração é somente para consulta. As alterações não serão salvas.');return}
+  if(id==='f-payment-config'){
+    var modeField=e.target.querySelector('[name="payment-mode"]:checked');
+    if(!modeField){flash('Escolha Pix manual ou Mercado Pago.');return}
+    var config={action:'save',mode:modeField.value};
+    if(config.mode==='pix'){
+      config.pixKeyType=v('p-tipochave');config.pixKey=v('p-chave');config.beneficiary=v('p-fav');config.instructions=v('p-instr-pix');
+      if(!config.pixKey){flash('Informe a chave Pix do condomínio.');return}
+    }else{
+      config.publicKey=v('p-mppk');config.accessToken=document.getElementById('p-mptoken').value.trim();
+      config.pix=document.getElementById('p-mp-pix').checked;config.cartao=document.getElementById('p-mp-cartao').checked;config.boleto=document.getElementById('p-mp-boleto').checked;
+      if(!config.publicKey){flash('Informe a Public Key da aplicação Mercado Pago.');return}
+      if(!MP_CONFIG.mercadoPago.hasAccessToken&&!config.accessToken){flash('Informe o Access Token do Mercado Pago.');return}
+      if(!config.pix&&!config.cartao&&!config.boleto){flash('Ative ao menos uma forma de pagamento.');return}
+    }
+    var saved=await supabase.functions.invoke('payment-config',{body:config});
+    if(saved.error||saved.data&&saved.data.error){flash(saved.data&&saved.data.error||'Não foi possível salvar. Confira se aplicou a migração e publicou a Edge Function.');return}
+    await refreshPaymentConfig();render();toast('Forma de pagamento salva');return;
+  }
   if(id==='f-tenant'){var unit=S.unidades.find(function(u){return u.id===e.target.dataset.unitId}),isEditing=!!(unit&&unit.situacao==='Inquilino'&&editingTenant);if(!unit||(unit.situacao!=='Vago'&&!isEditing)){flash('Esta unidade não está disponível para nova locação');return}var names=splitNames(v('n-nomes')),file=document.getElementById('n-contrato').files[0],contractPath=isEditing?(unit.contractPath||''):'';if(!names.length){flash('Informe ao menos um inquilino');return}if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var path=CONDO_ID+'/'+unit.id+'/locacao-'+uid()+'/'+file.name,uploaded=await supabase.storage.from('contratos-locacao').upload(path,file,{upsert:false,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}if(isEditing){var oldTenants=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('unidade_id',unit.id).eq('tipo','inquilino');if(oldTenants.error){flash('Não foi possível atualizar os moradores: '+oldTenants.error.message);return}}unit.morador=names.join(', ');unit.tel=v('n-tel')||'—';unit.situacao='Inquilino';unit.aluguel=parseFloat(v('n-aluguel'))||0;unit.residentIds=[];unit.contractPath=contractPath;unit.contractName=file?file.name:(isEditing?unit.contractName:'');unit.contractStart=v('n-inicio')||null;unit.contractEnd=v('n-fim')||null;editingTenant=false;save();await saveQueue;toast((isEditing?'Dados do inquilino atualizados':'Novo inquilino cadastrado')+' na unidade '+uLabel(unit));return}
   if(id==='f-unit'){var dono=v('u-dono'),situacao=v('u-sit'),morador=v('u-morador')||(situacao==='Proprietário residente'?dono:'');if(situacao==='Inquilino'&&!morador){flash('Informe ao menos um inquilino');return}var vagas=Array.from(new Set(v('u-vagas').split(',').map(function(x){return x.trim()}).filter(Boolean))),unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+file.name,file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}S.unidades.push({id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:v('u-tel')||'—',situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||'',parkingSpaces:vagas});unitTab='apartamentos';activeBlock=v('u-bloco').toUpperCase();save();toast('Unidade cadastrada')}
   else if(id==='f-config'){S.config.taxaCondominio=parseFloat(v('cfg-taxa'))||0;S.config.vencimentoDia=parseInt(v('cfg-venc'),10)||10;S.unidades.forEach(function(u){u.taxa=S.config.taxaCondominio});save();toast('Taxa padrão salva e cobranças atualizadas')}

@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 31093)
+Total output lines: 858
+
 import { createClient } from "@supabase/supabase-js";
 
 (function(){
@@ -30,7 +33,7 @@ function save(){if(DB_READY&&role!=='morador')saveQueue=saveQueue.catch(function
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas', unitTab='apartamentos', activeBlock='', activeUnitId='', editingTenant=false;
 var MY='A-302';
 var NAV={
-  sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['equipe_portaria','Equipe da portaria'],['comunicacao','Comunicados e chamados']],
+  sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['acessos','Acessos dos moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['equipe_portaria','Equipe da portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
   morador:[['minha','Início'],['pagamentos','Pagamentos'],['chamados','Chamados'],['encomendas','Encomendas'],['comunicacao','Comunicados']]
 };
@@ -99,7 +102,7 @@ function shell(){
   var mobileLabels={minha:'Início',pagamentos:'Pagar',chamados:'Chamados',encomendas:'Encomendas',comunicacao:'Avisos'};
   var mobileNav=resident?'<nav class="resident-bottom-nav" aria-label="Navegação do morador">'+items.map(function(i){return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+residentIcons[i[0]]+'<span>'+mobileLabels[i[0]]+'</span></button>'}).join('')+'</nav>':'';
   var residentHeader=resident?'<header class="resident-app-header"><div class="resident-app-brand"><div class="brand-mark">C</div><div><b>CondoGestor</b><small>'+esc(COND)+'</small></div></div><label class="resident-month"><span>Mês</span><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></label></header>':'';
-  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,equipe_portaria:vEquipePortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
+  var body={dashboard:vDash,unidades:vUnits,acessos:vAccesses,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,equipe_portaria:vEquipePortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
     '<div class="roles"><label>Sessão</label><button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
     (resident?'':'<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div>')+'<nav>'+navHtml+'</nav></aside><main class="'+(resident?'resident-main':'')+'">'+residentHeader+body+mobileNav+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
@@ -380,6 +383,21 @@ var tenantEditor=function(u){
   return head('Unidades e moradores',unitTab==='apartamentos'?'Apartamentos organizados por bloco. Abra um card para gerenciar a ocupação.':'Cadastre novas unidades e configure a cobrança padrão do condomínio.')+tabBar+(unitTab==='cadastro'?settingsAndForm:apartmentBoard);
 }
 
+function vAccesses(){
+  var rows=[];
+  S.unidades.filter(function(u){return u.situacao==='Inquilino'}).forEach(function(u){
+    var names=splitNames(u.morador),ids=u.residentIds||[],emails=u.residentEmails||[],users=u.residentUsers||[];
+    ids.forEach(function(id,index){
+      var email=emails[index]||'',active=!!users[index],pending=!!RESIDENT_INVITES[id];
+      if(active)delete RESIDENT_INVITES[id];
+      rows.push('<article class="resident-access-row"><div class="resident-access-person"><div><b>'+esc(names[index]||('Morador '+(index+1)))+'</b><p class="note">Apartamento '+esc(uLabel(u))+'</p></div><span class="pill '+(active?'ok':pending?'warn':'mute')+'">'+(active?'Acesso ativo':pending?'Convite enviado':'Sem acesso')+'</span></div>'+(active?'<p class="note">Este morador entra no aplicativo com '+esc(email||'o e-mail cadastrado')+'.</p>':(pending?'<p class="note">Convite enviado para '+esc(email)+'. O morador deve abrir o link e criar a senha.</p>':'')+'<form class="f resident-access-form" data-resident-access-form data-unit-id="'+esc(u.id)+'" data-resident-id="'+esc(id)+'"><label class="wide">E-mail de acesso<input type="email" name="email" value="'+esc(email)+'" required placeholder="morador@email.com" autocomplete="email"></label><button class="btn sm" type="submit">'+(pending?'Reenviar convite':'Cadastrar acesso e enviar convite')+'</button></form>')+'</article>');
+    });
+  });
+  return head('Acessos dos moradores','Cadastre e acompanhe o acesso de cada morador ao aplicativo.')+
+    '<section class="panel resident-access"><div><h3>Liberação de acesso ao aplicativo</h3><p class="note">Informe um e-mail para cada morador. O sistema enviará um convite para criar senha e entrar na área privada do próprio apartamento.</p></div>'+
+    (rows.length?rows.join(''):'<div class="empty">Ainda não há moradores em locações cadastradas. Primeiro cadastre os moradores em <b>Unidades e moradores</b> e salve a locação; depois eles aparecerão aqui.</div>')+'</section>';
+}
+
 function vFin(){
   var cob=S.unidades.map(function(u){var p=paid(u),c=cobranca(u);return '<tr><td class="num"><b>'+uLabel(u)+'</b></td><td>'+esc(u.dono)+'</td><td class="num">'+brl(c.taxa)+'</td><td class="num">'+brl(c.agua)+'</td><td class="num">'+brl(c.gas)+'</td>'+tdTaxas(u)+'<td class="num">'+(c.aluguel?brl(c.aluguel):'—')+'</td><td class="num"><b>'+brl(c.total)+'</b></td><td><span class="pill '+(p?'ok':MES>'2026-10'?'warn':'bad')+'">'+(p?'Pago':MES>'2026-10'?'A vencer':'Em atraso')+'</span></td><td><div class="row-actions">'+
     (p?'<button class="btn sm ghost" data-unpay="'+u.id+'">Estornar</button>':'<button class="btn sm" data-pay="'+u.id+'">Marcar como pago</button><button class="btn sm ghost" data-copy="'+u.id+'">Copiar cobrança</button>')+'</div></td></tr>'}).join('');
@@ -391,42 +409,7 @@ function vFin(){
   var despesas='<div class="panel"><h3>Lançar despesa</h3><form class="f" id="f-desp">'+
    '<label>Descrição<input id="d-desc" required></label>'+
    '<label>Categoria<select id="d-cat"><option>Pessoal</option><option>Consumo</option><option>Manutenção</option><option>Serviços</option><option>Reserva</option></select></label>'+
-   '<label>Valor (R$)<input id="d-valor" type="number" min="0.01" step="0.01" required></label>'+
-   '<label>Data<input id="d-data" type="date" required value="'+MES+'-15"></label>'+
-   '<button class="btn" type="submit">Lançar despesa</button></form></div>'+
-  '<div class="panel"><h3>Despesas do condomínio · '+esc(MES_LABEL)+'</h3><div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>'+dsp+'</tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td class="num"><b>'+brl(totalDespesas())+'</b></td><td></td></tr></tfoot></table></div></div>';
-  return head('Financeiro',MES_LABEL+' · vencimento no dia '+Number(S.config.vencimentoDia||10))+tabBar+(financeTab==='despesas'?despesas:financeTab==='meios'?vPag(true):cobrancas);
-}
-
-function vTaxas(){
-  var mo=function(sel){return MESES.map(function(m){return '<option value="'+m+'"'+(m===sel?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')};
-  var somaMes=S.unidades.reduce(function(s,u){return s+cobranca(u).extrasTotal},0);
-  var rows=S.taxas.map(function(t){
-    var alvo=taxaAlvo(t),vig=taxaVigente(t,MES);
-    var por=alvo.length?(t.modo==='rateio'?r2(t.valor/alvo.length):r2(t.valor)):0;
-    var aplic=t.aplica==='todas'?'Todos os apartamentos':t.aplica==='ocupadas'?'Apartamentos ocupados':'Escolhidos: '+alvo.map(uLabel).join(', ');
-    var st=vig?'<span class="pill ok">Ativa</span>':(MES<t.inicio?'<span class="pill warn">Começa em '+mesCurto(t.inicio)+'</span>':'<span class="pill mute">Encerrada</span>');
-    return '<tr><td><b>'+esc(t.nome)+'</b></td><td class="num">'+brl(t.valor)+(t.modo==='rateio'?' no total':' por apto')+'</td><td>'+aplic+'</td><td class="num">'+(vig?brl(por)+' por apto':'—')+'</td><td class="num">'+mesCurto(t.inicio)+(t.fim?' a '+mesCurto(t.fim):' em diante')+'</td><td>'+st+'</td><td><div class="row-actions">'+(vig&&!t.fim?'<button class="btn sm ghost" data-end-taxa="'+t.id+'">Encerrar após este mês</button>':'')+'<button class="btn sm danger" data-del-taxa="'+t.id+'">Excluir</button></div></td></tr>'}).join('');
-  return head('Taxas adicionais','Lixo, esgoto, fundo de reserva e outras cobranças por apartamento')+
-  '<div class="panel"><h3>Nova taxa</h3><form class="f" id="f-taxa">'+
-   '<label>Nome da taxa<input id="t-nome" required placeholder="Taxa de lixo"></label>'+
-   '<label>Valor (R$)<input id="t-valor" type="number" min="0.01" step="0.01" required></label>'+
-   '<label>Como cobrar<select id="t-modo"><option value="fixa">Valor fixo por apartamento</option><option value="rateio">Valor total dividido entre os apartamentos</option></select></label>'+
-   '<label>Cobrar de<select id="t-aplica"><option value="todas">Todos os apartamentos</option><option value="ocupadas">Somente apartamentos ocupados</option><option value="selecionadas">Apenas os marcados abaixo</option></select></label>'+
-   '<label>A partir de<select id="t-ini">'+mo(MES)+'</select></label>'+
-   '<label>Até<select id="t-fim"><option value="">Sem data final</option>'+mo('')+'</select></label>'+
-   '<div class="wide"><span style="font-size:12px;color:var(--muted)">Apartamentos (vale só para "Apenas os marcados")</span><div class="checks">'+
-    S.unidades.map(function(u){return '<label class="chk"><input type="checkbox" id="tu-'+u.id+'">'+uLabel(u)+'</label>'}).join('')+'</div></div>'+
-   '<button class="btn" type="submit">Cadastrar taxa</button></form>'+
-  '<p class="note">Total de taxas adicionais em '+MES_LABEL+': <b class="num">'+brl(somaMes)+'</b>. Cada taxa entra no total a pagar de cada apartamento na aba Financeiro.</p>'+
-  '<div class="tablewrap"><table><thead><tr><th>Taxa</th><th>Valor</th><th>Cobrada de</th><th>Em '+mesCurto(MES)+'</th><th>Vigência</th><th>Situação</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="empty">Nenhuma taxa adicional cadastrada.</td></tr>')+'</tbody></table></div></div>';
-}
-
-var TIPOS={pix:'PIX',transferencia:'Transferência bancária',boleto:'Boleto',dinheiro:'Dinheiro ou cheque',mercadopago:'Mercado Pago'};
-function meioResumo(m){var d=m.dados||{};
-  if(m.tipo==='pix')return esc((d.tipoChave||'Chave')+': '+(d.chave||'—')+(d.favorecido?' · '+d.favorecido:''));
-  if(m.tipo==='transferencia')return esc((d.banco||'Banco')+' · ag. '+(d.agencia||'—')+' · conta '+(d.conta||'—')+(d.favorecido?' · '+d.favorecido:''));
-  if(m.tipo==='mercadopago'){var f=[['pix','Pix'],['cartao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
+   '<label>Valor (R$)<input id="d-valor" type="number" min="0.01" …1093 tokens truncated…artao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
   return esc(m.instrucoes||'—')}
 function g(tipos,html){return '<label data-tipos="'+tipos+'"'+(tipos.split(' ').indexOf('pix')<0?' hidden':'')+'>'+html+'</label>'}
 function vPag(inFinance){

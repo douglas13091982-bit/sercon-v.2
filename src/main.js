@@ -31,7 +31,7 @@ function save(){if(DB_READY&&!DEMO)saveQueue=saveQueue.catch(function(){}).then(
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas';
 var MY='A-302';
 var NAV={
-  sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['pagamentos','Meios de pagamento'],['leituras','Leituras e rateios'],['portaria','Portaria'],['comunicacao','Comunicados e chamados']],
+  sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
   morador:[['minha','Minha unidade'],['comunicacao','Comunicados e chamados']]
 };
@@ -85,9 +85,9 @@ function shell(){
   var pend=S.encomendas.filter(function(e){return !e.retirada}).length;
   var navHtml=items.map(function(i){
     var c=''; if(i[0]==='portaria'&&role!=='morador')c='<span class="count">'+pend+'</span>';
-    if(i[0]==='pagamentos'){var pp=S.pagamentos.filter(function(x){return x.status==='Aguardando conferência'}).length;if(pp)c='<span class="count">'+pp+'</span>'}
+    if(i[0]==='financeiro'){var pp=S.pagamentos.filter(function(x){return x.status==='Aguardando conferência'}).length;if(pp)c='<span class="count">'+pp+'</span>'}
     return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+i[1]+c+'</button>'}).join('');
-  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,pagamentos:vPag,portaria:vPortaria,comunicacao:vComm,minha:vMinha}[view]();
+  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,comunicacao:vComm,minha:vMinha}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
     '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
     '<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div><nav>'+navHtml+'</nav></aside><main>'+body+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
@@ -248,7 +248,7 @@ function vFin(){
   var cob=S.unidades.map(function(u){var p=paid(u),c=cobranca(u);return '<tr><td class="num"><b>'+uLabel(u)+'</b></td><td>'+esc(u.dono)+'</td><td class="num">'+brl(c.taxa)+'</td><td class="num">'+brl(c.agua)+'</td><td class="num">'+brl(c.gas)+'</td>'+tdTaxas(u)+'<td class="num">'+(c.aluguel?brl(c.aluguel):'—')+'</td><td class="num"><b>'+brl(c.total)+'</b></td><td><span class="pill '+(p?'ok':MES>'2026-10'?'warn':'bad')+'">'+(p?'Pago':MES>'2026-10'?'A vencer':'Em atraso')+'</span></td><td><div class="row-actions">'+
     (p?'<button class="btn sm ghost" data-unpay="'+u.id+'">Estornar</button>':'<button class="btn sm" data-pay="'+u.id+'">Marcar como pago</button><button class="btn sm ghost" data-copy="'+u.id+'">Copiar cobrança</button>')+'</div></td></tr>'}).join('');
   var dsp=despMes().slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(d){return '<tr><td class="num">'+fmtD(d.data)+'</td><td>'+esc(d.desc)+'</td><td><span class="pill mute">'+esc(d.cat)+'</span></td><td class="num">'+brl(d.valor)+'</td><td><button class="btn sm danger" data-del-desp="'+d.id+'">Excluir</button></td></tr>'}).join('');
-  var tabs=[['cobrancas','Cobranças do mês'],['despesas','Despesas do condomínio']];
+  var tabs=[['cobrancas','Cobranças do mês'],['despesas','Despesas do condomínio'],['meios','Meios de pagamento']];
   var tabBar='<div class="subtabs" role="tablist" aria-label="Seções do financeiro">'+tabs.map(function(t){return '<button type="button" role="tab" data-ftab="'+t[0]+'" aria-selected="'+(t[0]===financeTab)+'">'+t[1]+'</button>'}).join('')+'</div>';
   var cobrancas='<div class="panel"><h3>Cobranças automáticas</h3><p class="note">O sistema calcula taxa padrão, água, gás, taxas adicionais vigentes e aluguel quando configurado. Recalcular é seguro: lançamentos pagos são preservados.</p><button class="btn" data-generate-bills>Gerar/recalcular cobranças de '+esc(MES_LABEL)+'</button></div>'+
   '<div class="panel"><h3>Cobranças de '+esc(MES_LABEL)+'</h3><p class="note"><label for="c-alu-fin">Aluguel na cobrança: </label><select id="c-alu-fin" style="width:auto"><option value="nao'+(!S.config.cobrarAluguel?'" selected':'"')+'>Repasse ao proprietário (fora do total)</option><option value="sim'+(S.config.cobrarAluguel?'" selected':'"')+'>Somar ao total a pagar</option></select></p><div class="tablewrap"><table><thead><tr><th>Unidade</th><th>Responsável</th><th>Taxa</th><th>Água</th><th>Gás</th>'+thTaxas()+'<th>Aluguel</th><th>Total a pagar</th><th>Situação</th><th></th></tr></thead><tbody>'+cob+'</tbody></table></div></div>';
@@ -259,7 +259,7 @@ function vFin(){
    '<label>Data<input id="d-data" type="date" required value="'+MES+'-15"></label>'+
    '<button class="btn" type="submit">Lançar despesa</button></form></div>'+
   '<div class="panel"><h3>Despesas do condomínio · '+esc(MES_LABEL)+'</h3><div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>'+dsp+'</tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td class="num"><b>'+brl(totalDespesas())+'</b></td><td></td></tr></tfoot></table></div></div>';
-  return head('Financeiro',MES_LABEL+' · vencimento no dia '+Number(S.config.vencimentoDia||10))+tabBar+(financeTab==='despesas'?despesas:cobrancas);
+  return head('Financeiro',MES_LABEL+' · vencimento no dia '+Number(S.config.vencimentoDia||10))+tabBar+(financeTab==='despesas'?despesas:financeTab==='meios'?vPag(true):cobrancas);
 }
 
 function vTaxas(){
@@ -293,13 +293,13 @@ function meioResumo(m){var d=m.dados||{};
   if(m.tipo==='mercadopago'){var f=[['pix','PIX'],['cartao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Conta '+(d.email||'—')+' · aceita '+(f||'—'))}
   return esc(m.instrucoes||'—')}
 function g(tipos,html){return '<label data-tipos="'+tipos+'"'+(tipos.split(' ').indexOf('pix')<0?' hidden':'')+'>'+html+'</label>'}
-function vPag(){
+function vPag(inFinance){
   var linhas=S.meios.map(function(m){var mp=m.tipo==='mercadopago';
     return '<tr><td><b>'+esc(m.nome)+'</b></td><td><span class="pill mute">'+TIPOS[m.tipo]+'</span>'+(mp?' <span class="pill warn">Demonstração</span>':'')+'</td><td>'+meioResumo(m)+'</td><td><span class="pill '+(m.ativo?'ok':'mute')+'">'+(m.ativo?'Ativo':'Desativado')+'</span></td><td><div class="row-actions"><button class="btn sm ghost" data-meio-toggle="'+m.id+'">'+(m.ativo?'Desativar':'Ativar')+'</button><button class="btn sm danger" data-del-meio="'+m.id+'">Excluir</button></div></td></tr>'}).join('');
   var infos=S.pagamentos.slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(x){var cls=x.status==='Confirmado'?'ok':x.status==='Recusado'?'bad':'warn';
     return '<tr><td class="num">'+fmtDT(x.data)+'</td><td class="num">'+esc(x.unidade)+'</td><td>'+mesLabel(x.mes)+'</td><td class="num">'+brl(x.valor)+'</td><td>'+esc(x.meio)+'</td><td><span class="pill '+cls+'">'+x.status+'</span></td><td>'+(x.status==='Aguardando conferência'?'<div class="row-actions"><button class="btn sm" data-pag-ok="'+x.id+'">Confirmar</button><button class="btn sm danger" data-pag-no="'+x.id+'">Recusar</button></div>':'')+'</td></tr>'}).join('');
   var tipoOpts=Object.keys(TIPOS).map(function(k){return '<option value="'+k+'">'+TIPOS[k]+'</option>'}).join('');
-  return head('Meios de pagamento','Como os moradores pagam as faturas: manual ou pelo Mercado Pago')+
+  return (inFinance?'':head('Meios de pagamento','Como os moradores pagam as faturas: manual ou pelo Mercado Pago'))+
   '<div class="panel"><h3>Novo meio de pagamento</h3><form class="f" id="f-meio">'+
    '<label>Nome exibido ao morador<input id="p-nome" required placeholder="PIX do condomínio"></label>'+
    '<label>Tipo<select id="p-tipo">'+tipoOpts+'</select></label>'+

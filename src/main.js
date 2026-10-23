@@ -623,12 +623,13 @@ document.addEventListener('click',async function(e){
   if(d.next){f=S.chamados.filter(function(x){return x.id===d.next})[0];f.status=f.status==='Aberto'?'Em andamento':'Resolvido';save();toast('Chamado atualizado');return}
 });
 document.addEventListener('submit',async function(e){
-  e.preventDefault();var id=e.target.id, v=function(i){return document.getElementById(i).value.trim()};
+  e.preventDefault();var id=e.target.id, v=function(i){var field=document.getElementById(i);return field?field.value.trim():''};
   if(id==='f-auth'){
-    var email=v('a-email'),password=v('a-password');authNotice='';renderLoading('Validando acesso…');
+    var email=v('a-email'),password=v('a-password'),registering=authMode==='register';
+    var meta=registering?{nome:v('a-nome'),condominio_nome:v('a-cond'),condominio_cnpj:v('a-cnpj'),condominio_endereco:v('a-endereco'),condominio_telefone:v('a-telefone'),condominio_email:email,taxa_condominio:Number(v('a-taxa')),vencimento_dia:Number(v('a-venc')),agua_modo:v('a-agua'),valor_m3_agua:Number(v('a-agua-tarifa')),valor_m3_gas:Number(v('a-gas')),criterio_rateio_agua:'fracao_ideal'}:null;
+    authNotice='';renderLoading('Validando acesso…');
     (async function(){try{
-      if(authMode==='register'){
-        var meta={nome:v('a-nome'),condominio_nome:v('a-cond'),condominio_cnpj:v('a-cnpj'),condominio_endereco:v('a-endereco'),condominio_telefone:v('a-telefone'),condominio_email:email,taxa_condominio:Number(v('a-taxa')),vencimento_dia:Number(v('a-venc')),agua_modo:v('a-agua'),valor_m3_agua:Number(v('a-agua-tarifa')),valor_m3_gas:Number(v('a-gas')),criterio_rateio_agua:'fracao_ideal'};
+      if(registering){
         var created=await supabase.auth.signUp({email:email,password:password,options:{data:meta}});if(created.error)throw created.error;
         if(!created.data.session){authNotice='Cadastro criado. Confirme o e-mail e depois entre para acessar o condomínio.';authMode='login';renderAuth();return}
         await loadWorkspace(created.data.session);

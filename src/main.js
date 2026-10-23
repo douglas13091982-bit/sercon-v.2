@@ -33,7 +33,7 @@ var MY='A-302';
 var NAV={
   sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
-  morador:[['minha','Minha unidade'],['comunicacao','Comunicados e chamados']]
+  morador:[['minha','Minha unidade'],['comunicacao','Comunicados']]
 };
 var ROLE_LABEL={sindico:'Síndico',portaria:'Portaria',morador:'Morador'};
 var uLabel=function(u){return u.bloco+'-'+u.apto};
@@ -449,16 +449,21 @@ function vPortaria(){
 function vComm(){
   var sind=role==='sindico';
   var not=S.comunicados.slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(n){return '<div class="item"><div><b>'+esc(n.titulo)+'</b><p>'+esc(n.texto)+'</p><p class="num" style="font-size:12px">'+fmtD(n.data)+'</p></div>'+(sind?'<button class="btn sm danger" data-del-not="'+n.id+'">Excluir</button>':'')+'</div>'}).join('');
-  var ch=S.chamados.filter(function(c){return role!=='morador'||c.unidade===MY});
+  var ch=S.chamados;
   var chHtml=ch.map(function(c){
     var cls=c.status==='Aberto'?'bad':c.status==='Em andamento'?'warn':'ok';
     var act=sind&&c.status!=='Resolvido'?'<button class="btn sm ghost" data-next="'+c.id+'">'+(c.status==='Aberto'?'Iniciar':'Resolver')+'</button>':'';
     return '<div class="item"><div><b>'+esc(c.titulo)+'</b><p>'+esc(c.unidade)+' · '+fmtD(c.data)+'</p></div><div class="row-actions"><span class="pill '+cls+'">'+c.status+'</span>'+act+'</div></div>'}).join('')||'<p class="empty">Nenhum chamado.</p>';
   var fNot=sind?'<form class="f" id="f-not"><label class="wide">Título<input id="n-tit" required></label><label class="wide">Mensagem<textarea id="n-txt" rows="3" required></textarea></label><button class="btn" type="submit">Publicar comunicado</button></form>':'';
-  var fCh=role==='portaria'?'':'<form class="f" id="f-ch">'+(sind?'<label>Unidade<select id="c-un">'+unitOptions()+'</select></label>':'')+'<label class="wide">Descreva o problema<input id="c-tit" required></label><button class="btn" type="submit">Abrir chamado</button></form>';
-  return head(role==='portaria'?'Comunicados':'Comunicados e chamados','Avisos do condomínio'+(role==='portaria'?'':' e solicitações de manutenção'))+
-  '<div class="grid"><div class="panel"><h3>Comunicados</h3>'+fNot+'<div class="list">'+not+'</div></div>'+
-  (role==='portaria'?'':'<div class="panel"><h3>'+(role==='morador'?'Meus chamados':'Chamados')+'</h3>'+fCh+'<div class="list">'+chHtml+'</div></div>')+'</div>';
+  var fCh=sind?'<form class="f" id="f-ch"><label>Unidade<select id="c-un">'+unitOptions()+'</select></label><label class="wide">Descreva o problema<input id="c-tit" required></label><button class="btn" type="submit">Abrir chamado</button></form>':'';
+  return head(sind?'Comunicados e chamados':'Comunicados',sind?'Avisos do condomínio e solicitações de manutenção':'Avisos do condomínio')+
+  '<div class="grid"><div class="panel"><h3>Comunicados</h3>'+fNot+'<div class="list">'+(not||'<p class="empty">Nenhum comunicado.</p>')+'</div></div>'+
+  (sind?'<div class="panel"><h3>Chamados dos moradores</h3>'+fCh+'<div class="list">'+chHtml+'</div></div>':'')+'</div>';
+}
+function vTenantCalls(unitLabel){
+  var calls=S.chamados.filter(function(c){return c.unidade===unitLabel}).slice().sort(function(a,b){return b.data.localeCompare(a.data)});
+  var items=calls.map(function(c){var cls=c.status==='Aberto'?'bad':c.status==='Em andamento'?'warn':'ok';return '<div class="item"><div><b>'+esc(c.titulo)+'</b><p>Aberto em '+fmtD(c.data)+'</p></div><span class="pill '+cls+'">'+esc(c.status)+'</span></div>'}).join('')||'<p class="empty">Você ainda não abriu chamados para esta unidade.</p>';
+  return '<div class="panel" style="margin-top:16px"><h3>Meus chamados</h3><p class="note">Abra uma solicitação para o síndico e acompanhe o andamento aqui.</p><form class="f" id="f-ch"><label class="wide">O que precisa de atendimento?<input id="c-tit" required placeholder="Ex.: manutenção no banheiro"></label><button class="btn" type="submit">Abrir chamado</button></form><div class="list">'+items+'</div></div>';
 }
 
 function vMinha(){
@@ -477,7 +482,7 @@ function vMinha(){
   '<div class="panel"><div class="unit-card"><div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div><div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Morador</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
   '<div class="grid"><div class="panel"><h3>Valores do mês</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+
   '<div>'+pagarHtml(u,c,p)+'<div class="panel"><h3>Encomendas na portaria</h3>'+(enc.length?'<div class="list">'+enc.map(function(e){return '<div class="item"><div><b>'+esc(e.transp)+'</b><p>chegou '+fmtDT(e.chegada)+'</p></div><span class="pill warn">Aguardando retirada</span></div>'}).join('')+'</div>':'<p class="empty">Nenhuma encomenda aguardando.</p>')+'</div>'+
-  '<div class="panel" style="margin-top:16px"><h3>Último comunicado</h3>'+(S.comunicados[0]?'<b>'+esc(S.comunicados[0].titulo)+'</b><p style="color:var(--muted)">'+esc(S.comunicados[0].texto)+'</p>':'<p class="empty">Sem comunicados.</p>')+'</div></div></div>';
+  '<div class="panel" style="margin-top:16px"><h3>Último comunicado</h3>'+(S.comunicados[0]?'<b>'+esc(S.comunicados[0].titulo)+'</b><p style="color:var(--muted)">'+esc(S.comunicados[0].texto)+'</p>':'<p class="empty">Sem comunicados.</p>')+'</div></div></div>'+(role==='morador'?vTenantCalls(ul):'');
 }
 
 function render(){

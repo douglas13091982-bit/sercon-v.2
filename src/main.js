@@ -485,8 +485,9 @@ function vMinha(){
   rows+=tr(S.config.cobrarAluguel&&c.aluguel?'Total a pagar (com aluguel)':'Total a pagar ao condomínio',brl(c.total),'tot');
   if(c.aluguel&&!S.config.cobrarAluguel)rows+=tr('Total com aluguel',brl(r2(c.total+c.aluguel)),'tot');
   var st=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
+  var unitDisplay=role==='morador'?'<div><small>Minha unidade</small><b>'+esc(ul)+'</b></div>':'<div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div>';
   return head('Minha unidade',esc(COND)+' · '+ul+' · '+MES_LABEL)+
-  '<div class="panel"><div class="unit-card"><div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div><div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Morador</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
+  '<div class="panel"><div class="unit-card">'+unitDisplay+'<div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Morador</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
   '<div class="grid"><div class="panel"><h3>Valores do mês</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+
   '<div>'+pagarHtml(u,c,p)+'<div class="panel"><h3>Encomendas na portaria</h3>'+(enc.length?'<div class="list">'+enc.map(function(e){return '<div class="item"><div><b>'+esc(e.transp)+'</b><p>chegou '+fmtDT(e.chegada)+'</p></div><span class="pill warn">Aguardando retirada</span></div>'}).join('')+'</div>':'<p class="empty">Nenhuma encomenda aguardando.</p>')+'</div>'+
   '<div class="panel" style="margin-top:16px"><h3>Último comunicado</h3>'+(S.comunicados[0]?'<b>'+esc(S.comunicados[0].titulo)+'</b><p style="color:var(--muted)">'+esc(S.comunicados[0].texto)+'</p>':'<p class="empty">Sem comunicados.</p>')+'</div></div></div>'+(role==='morador'?vTenantCalls(ul):'');
@@ -507,7 +508,7 @@ function closeUnitModal(){var id=activeUnitId;activeUnitId='';editingTenant=fals
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&activeUnitId){e.preventDefault();closeUnitModal();return}var card=e.target.closest('[data-open-unit][role="button"]');if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openUnitModal(card.dataset.openUnit)}});
 document.addEventListener('change',function(e){
   if(e.target.id==='mes'){setMes(e.target.value);render()}
-  if(e.target.id==='my-unit'){MY=e.target.value;render()}
+  if(e.target.id==='my-unit'&&role!=='morador'){MY=e.target.value;render()}
   if(e.target.id==='demo-role'&&DEMO){role=e.target.value==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';MY='A-101';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};render()}
   if(e.target.id==='c-alu-fin'){S.config.cobrarAluguel=e.target.value==='sim';save();render()}
   if(e.target.id==='p-tipo'){var tp=e.target.value;document.querySelectorAll('#f-meio [data-tipos]').forEach(function(el){el.hidden=el.dataset.tipos.split(' ').indexOf(tp)<0})}

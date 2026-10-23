@@ -243,7 +243,7 @@ function vUnits(){
    '<label>Início do contrato<input id="u-inicio" type="date"></label><label>Fim do contrato<input id="u-fim" type="date"></label>'+
    '<label class="wide">Contrato de aluguel (PDF, JPG ou PNG)<input id="u-contrato" type="file" accept="application/pdf,image/jpeg,image/png"></label>'+
    '<p class="note wide">Taxa mensal padrão do condomínio: <b>'+brl(S.config.taxaCondominio||0)+'</b>. Configure esse valor no cadastro do condomínio.</p>'+
-   '<button class="btn" type="submit">Cadastrar</button></form>'+;
+   '<button class="btn" type="submit">Cadastrar</button></form>';
   if(blocks.indexOf(activeBlock)<0)activeBlock=blocks[0]||'';
   var blockTabs=blocks.map(function(bl){return '<button type="button" role="tab" data-block-tab="'+esc(bl)+'" aria-selected="'+(bl===activeBlock)+'">Bloco '+esc(bl)+'</button>'}).join('');
   var apartmentBoard=blocks.length?'<div class="subtabs" role="tablist" aria-label="Blocos do condomínio">'+blockTabs+'</div><div class="block-board">'+blockPanels[blocks.indexOf(activeBlock)]+'</div>':'<div class="panel"><p class="empty">Nenhuma unidade cadastrada. Use a aba “Cadastrar unidade” para começar.</p></div>';

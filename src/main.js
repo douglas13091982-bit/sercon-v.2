@@ -83,7 +83,7 @@ function shell(){
 }
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
 
-var authMode='register', authNotice='';
+var authMode='login', authNotice='';
 function setShell(on){var app=document.getElementById('app');if(app)app.className=on?'shell':'auth'}
 function renderAuth(){
   var app=document.getElementById('app');

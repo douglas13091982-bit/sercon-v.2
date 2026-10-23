@@ -89,10 +89,14 @@ function shell(){
     var c=''; if(i[0]==='portaria'&&role!=='morador')c='<span class="count">'+pend+'</span>';
     if(i[0]==='financeiro'){var pp=S.pagamentos.filter(function(x){return x.status==='Aguardando conferência'}).length;if(pp)c='<span class="count">'+pp+'</span>'}
     return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+i[1]+c+'</button>'}).join('');
+  var resident=role==='morador';
+  var residentIcons={minha:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',comunicacao:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 8 8 0 0 1-3.8-.95L4 20l1.3-4.2A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h8M8 14h5"/></svg>'};
+  var mobileNav=resident?'<nav class="resident-bottom-nav" aria-label="Navegação do morador">'+items.map(function(i){var label=i[0]==='minha'?'Início':'Avisos';return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+residentIcons[i[0]]+'<span>'+label+'</span></button>'}).join('')+'</nav>':'';
+  var residentHeader=resident?'<header class="resident-app-header"><div class="resident-app-brand"><div class="brand-mark">C</div><div><b>CondoGestor</b><small>'+esc(COND)+'</small></div></div><label class="resident-month"><span>Mês</span><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></label></header>':'';
   var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,comunicacao:vComm,minha:vMinha}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
     '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span><label for="demo-role">Visualizar como</label><select id="demo-role"><option value="sindico"'+(role==='sindico'?' selected':'')+'>Síndico</option><option value="morador"'+(role==='morador'?' selected':'')+'>Morador</option></select>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
-    '<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div><nav>'+navHtml+'</nav></aside><main>'+body+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
+    (resident?'':'<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div>')+'<nav>'+navHtml+'</nav></aside><main class="'+(resident?'resident-main':'')+'">'+residentHeader+body+mobileNav+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
 }
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
 
@@ -499,6 +503,7 @@ function render(){
   document.body.classList.toggle('unit-modal-open',!!activeUnitId);
   var a=document.activeElement, id=a&&a.id;
   setShell(true);
+  document.getElementById('app').classList.toggle('resident-app',role==='morador');
   document.getElementById('app').innerHTML=shell();
   if(id==='mes'){var el=document.getElementById(id);if(el)el.focus()}
 }

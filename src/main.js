@@ -34,7 +34,7 @@ var MY='A-302';
 var NAV={
   sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
-  morador:[['minha','Minha unidade'],['comunicacao','Comunicados']]
+  morador:[['minha','Início'],['pagamentos','Pagamentos'],['chamados','Chamados'],['encomendas','Encomendas'],['comunicacao','Comunicados']]
 };
 var ROLE_LABEL={sindico:'Síndico',portaria:'Portaria',morador:'Morador'};
 var uLabel=function(u){return u.bloco+'-'+u.apto};
@@ -90,10 +90,17 @@ function shell(){
     if(i[0]==='financeiro'){var pp=S.pagamentos.filter(function(x){return x.status==='Aguardando conferência'}).length;if(pp)c='<span class="count">'+pp+'</span>'}
     return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+i[1]+c+'</button>'}).join('');
   var resident=role==='morador';
-  var residentIcons={minha:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',comunicacao:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 8 8 0 0 1-3.8-.95L4 20l1.3-4.2A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h8M8 14h5"/></svg>'};
-  var mobileNav=resident?'<nav class="resident-bottom-nav" aria-label="Navegação do morador">'+items.map(function(i){var label=i[0]==='minha'?'Início':'Avisos';return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+residentIcons[i[0]]+'<span>'+label+'</span></button>'}).join('')+'</nav>':'';
+  var residentIcons={
+    minha:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',
+    pagamentos:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>',
+    chamados:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 8 8 0 0 1-3.8-.95L4 20l1.3-4.2A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h8M8 14h5"/></svg>',
+    encomendas:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v9l9 5 9-5V8M12 13v9M7.5 5.5l9 5"/></svg>',
+    comunicacao:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v16l-3-2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>'
+  };
+  var mobileLabels={minha:'Início',pagamentos:'Pagar',chamados:'Chamados',encomendas:'Encomendas',comunicacao:'Avisos'};
+  var mobileNav=resident?'<nav class="resident-bottom-nav" aria-label="Navegação do morador">'+items.map(function(i){return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+residentIcons[i[0]]+'<span>'+mobileLabels[i[0]]+'</span></button>'}).join('')+'</nav>':'';
   var residentHeader=resident?'<header class="resident-app-header"><div class="resident-app-brand"><div class="brand-mark">C</div><div><b>CondoGestor</b><small>'+esc(COND)+'</small></div></div><label class="resident-month"><span>Mês</span><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></label></header>':'';
-  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,comunicacao:vComm,minha:vMinha}[view]();
+  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
     '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span><label for="demo-role">Visualizar como</label><select id="demo-role"><option value="sindico"'+(role==='sindico'?' selected':'')+'>Síndico</option><option value="morador"'+(role==='morador'?' selected':'')+'>Morador</option></select>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
     (resident?'':'<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div>')+'<nav>'+navHtml+'</nav></aside><main class="'+(resident?'resident-main':'')+'">'+residentHeader+body+mobileNav+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
@@ -474,12 +481,18 @@ function vComm(){
 function vTenantCalls(unitLabel){
   var calls=S.chamados.filter(function(c){return c.unidade===unitLabel}).slice().sort(function(a,b){return b.data.localeCompare(a.data)});
   var items=calls.map(function(c){var cls=c.status==='Aberto'?'bad':c.status==='Em andamento'?'warn':'ok';return '<div class="item"><div><b>'+esc(c.titulo)+'</b><p>Aberto em '+fmtD(c.data)+'</p></div><span class="pill '+cls+'">'+esc(c.status)+'</span></div>'}).join('')||'<p class="empty">Você ainda não abriu chamados para esta unidade.</p>';
-  return '<div class="panel" style="margin-top:16px"><h3>Meus chamados</h3><p class="note">Abra uma solicitação para o síndico e acompanhe o andamento aqui.</p><form class="f" id="f-ch"><label class="wide">O que precisa de atendimento?<input id="c-tit" required placeholder="Ex.: manutenção no banheiro"></label><button class="btn" type="submit">Abrir chamado</button></form><div class="list">'+items+'</div></div>';
+  return head('Meus chamados','Abra uma solicitação e acompanhe as atualizações da sua unidade.')+'<div class="panel"><h3>Nova solicitação</h3><form class="f" id="f-ch"><label class="wide">O que precisa de atendimento?<input id="c-tit" required placeholder="Ex.: manutenção no banheiro"></label><button class="btn" type="submit">Enviar chamado</button></form><h3>Histórico dos chamados</h3><div class="list">'+items+'</div></div>';
 }
 
-function vMinha(){
-  var u=unitByLabel(MY)||S.unidades[0],ul=uLabel(u);
-  var p=paid(u),c=cobranca(u),enc=S.encomendas.filter(function(e){return e.unidade===ul&&!e.retirada});
+function vTenantEncomendas(){
+  var ul=MY,enc=S.encomendas.filter(function(e){return e.unidade===ul}).slice().sort(function(a,b){return b.chegada.localeCompare(a.chegada)});
+  var pend=enc.filter(function(e){return !e.retirada}).length;
+  var list=enc.map(function(e){return '<div class="item"><div><b>'+esc(e.transp||'Encomenda')+'</b><p>Recebida em '+fmtDT(e.chegada)+'</p></div><span class="pill '+(e.retirada?'ok':'warn')+'">'+(e.retirada?'Retirada '+fmtDT(e.retirada):'Aguardando retirada')+'</span></div>'}).join('')||'<p class="empty">Nenhuma encomenda registrada para sua unidade.</p>';
+  return head('Minhas encomendas',esc(ul)+' · acompanhe as entregas recebidas na portaria.')+'<div class="panel"><div class="item"><div><b>Encomendas pendentes</b><p>Itens aguardando retirada na portaria.</p></div><span class="pill '+(pend?'warn':'ok')+'">'+pend+'</span></div><div class="list">'+list+'</div></div>';
+}
+
+function vTenantPayment(){
+  var u=unitByLabel(MY)||S.unidades[0],p=paid(u),c=cobranca(u);
   var tr=function(l,v,cls){return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+l+'</td><td class="num">'+v+'</td></tr>'};
   var rows=tr('Taxa condominial',brl(c.taxa));
   c.extras.forEach(function(e){rows+=tr(esc(e.nome),brl(e.valor))});
@@ -488,13 +501,20 @@ function vMinha(){
   if(c.aluguel)rows+=tr('Aluguel'+(S.config.cobrarAluguel?'':' (pago ao proprietário)'),brl(c.aluguel));
   rows+=tr(S.config.cobrarAluguel&&c.aluguel?'Total a pagar (com aluguel)':'Total a pagar ao condomínio',brl(c.total),'tot');
   if(c.aluguel&&!S.config.cobrarAluguel)rows+=tr('Total com aluguel',brl(r2(c.total+c.aluguel)),'tot');
+  var status=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
+  return head('Pagamentos',esc(MES_LABEL)+' · Unidade '+esc(uLabel(u)))+'<div class="panel"><div class="item"><div><b>Situação da cobrança</b><p>Total deste mês: <strong class="num">'+brl(c.total)+'</strong></p></div>'+status+'</div><h3>Detalhamento</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div></div>'+pagarHtml(u,c,p);
+}
+
+function vMinha(){
+  var u=unitByLabel(MY)||S.unidades[0],ul=uLabel(u);
+  var p=paid(u),c=cobranca(u),enc=S.encomendas.filter(function(e){return e.unidade===ul&&!e.retirada}).length,calls=S.chamados.filter(function(ch){return ch.unidade===ul&&ch.status!=='Resolvido'}).length;
   var st=p?'<span class="pill ok">Pago</span>':(MES>'2026-10'?'<span class="pill warn">A vencer</span>':'<span class="pill bad">Em atraso</span>');
   var unitDisplay=role==='morador'?'<div><small>Minha unidade</small><b>'+esc(ul)+'</b></div>':'<div><small>Ver unidade</small><select id="my-unit">'+S.unidades.map(function(x){var l=uLabel(x);return '<option'+(l===ul?' selected':'')+'>'+l+'</option>'}).join('')+'</select></div>';
+  var news=S.comunicados.slice().sort(function(a,b){return b.data.localeCompare(a.data)})[0];
   return head('Minha unidade',esc(COND)+' · '+ul+' · '+MES_LABEL)+
-  '<div class="panel"><div class="unit-card">'+unitDisplay+'<div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Morador</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
-  '<div class="grid"><div class="panel"><h3>Valores do mês</h3><div class="tablewrap"><table><tbody>'+rows+'</tbody></table></div>'+(!p?'<button class="btn" type="button" data-open-payment-options style="margin-top:16px">Pagar cobrança · '+brl(c.total)+'</button><p class="note">Escolha uma das formas de pagamento habilitadas pelo síndico.</p>':'')+'</div>'+
-  '<div>'+pagarHtml(u,c,p)+'<div class="panel"><h3>Encomendas na portaria</h3>'+(enc.length?'<div class="list">'+enc.map(function(e){return '<div class="item"><div><b>'+esc(e.transp)+'</b><p>chegou '+fmtDT(e.chegada)+'</p></div><span class="pill warn">Aguardando retirada</span></div>'}).join('')+'</div>':'<p class="empty">Nenhuma encomenda aguardando.</p>')+'</div>'+
-  '<div class="panel" style="margin-top:16px"><h3>Último comunicado</h3>'+(S.comunicados[0]?'<b>'+esc(S.comunicados[0].titulo)+'</b><p style="color:var(--muted)">'+esc(S.comunicados[0].texto)+'</p>':'<p class="empty">Sem comunicados.</p>')+'</div></div></div>'+(role==='morador'?vTenantCalls(ul):'');
+  '<div class="panel"><div class="unit-card">'+unitDisplay+'<div><small>Proprietário</small>'+esc(u.dono)+'</div><div><small>Moradores</small>'+esc(u.morador)+'</div><div><small>'+MES_LABEL+'</small>'+st+'</div></div></div>'+
+  '<div class="grid resident-shortcuts"><button class="panel resident-shortcut" type="button" data-nav="pagamentos"><small>Pagamento do mês</small><b>'+brl(c.total)+'</b><span>'+ (p?'Cobrança paga':'Ver cobrança e pagar')+'</span></button><button class="panel resident-shortcut" type="button" data-nav="chamados"><small>Meus chamados</small><b>'+calls+'</b><span>Solicitações em andamento</span></button><button class="panel resident-shortcut" type="button" data-nav="encomendas"><small>Encomendas</small><b>'+enc+'</b><span>Aguardando retirada</span></button></div>'+
+  '<div class="panel resident-news"><div><small>Comunicado recente</small><b>'+(news?esc(news.titulo):'Nenhum comunicado novo')+'</b><p>'+(news?esc(news.texto):'Os avisos do condomínio aparecerão aqui.')+'</p></div><button class="btn ghost sm" type="button" data-nav="comunicacao">Ver avisos</button></div>';
 }
 
 function render(){

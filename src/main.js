@@ -365,7 +365,6 @@ var tenantEditor=function(u){
    '<label>Apartamento<input id="u-apto" required maxlength="6" placeholder="401"></label>'+
    '<label>Proprietário<input id="u-dono" required></label>'+
    '<label class="wide">Moradores/inquilinos<textarea id="u-morador" rows="3" placeholder="Digite um nome por linha"></textarea><small>Você pode cadastrar várias pessoas no mesmo apartamento, uma por linha.</small></label>'+
-   '<section class="panel resident-access wide"><h4>Acesso ao aplicativo dos moradores</h4><p class="note">Informe um e-mail para cada morador, um por linha e na mesma ordem dos nomes. Ao salvar a unidade, o sistema envia o convite para criar a senha e acessar o aplicativo.</p><label class="wide">E-mails para liberar o acesso<textarea id="u-access-emails" rows="3" placeholder="morador1@email.com&#10;morador2@email.com"></textarea><small>Deixe uma linha vazia para qualquer morador que ainda não terá acesso.</small></label></section>'+
    '<label>Telefone<input id="u-tel" placeholder="(47) 90000-0000"></label>'+
    '<label>Situação<select id="u-sit"><option>Proprietário residente</option><option>Inquilino</option><option>Vago</option></select></label>'+
    '<label>Aluguel (R$)<input id="u-alu" type="number" min="0" step="0.01" value="0"></label>'+
@@ -819,40 +818,7 @@ document.addEventListener('submit',async function(e){
     editingTenant=false;try{await saveQueue;await persistWorkspace()}catch(persistError){flash('Não foi possível salvar os dados do inquilino: '+(persistError.message||persistError));return}render();
     toast('Locação salva. O acesso ao aplicativo pode ser cadastrado na seção separada abaixo.');return
   }
-  if(id==='f-unit'){
-    var dono=v('u-dono'),situacao=v('u-sit'),names=splitNames(v('u-morador'));
-    var morador=names.join(', ')||(situacao==='Proprietário residente'?dono:'');
-    if(situacao==='Inquilino'&&!names.length){flash('Informe ao menos um inquilino');return}
-    var accessLines=(document.getElementById('u-access-emails').value||'').split(/\r?\n/).map(function(email){return email.trim().toLowerCase()});
-    while(accessLines.length&&!accessLines[accessLines.length-1])accessLines.pop();
-    if(accessLines.length>names.length){flash('Informe no máximo um e-mail por morador, na mesma ordem dos nomes');return}
-    for(var emailIndex=0;emailIndex<accessLines.length;emailIndex++)if(accessLines[emailIndex]&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accessLines[emailIndex])){flash('Confira o e-mail da linha '+(emailIndex+1));return}
-    var vagas=Array.from(new Set(v('u-vagas').split(',').map(function(x){return x.trim()}).filter(Boolean)));
-    var unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';
-    if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+file.name,file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}
-    var unit={id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:v('u-tel')||'—',situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||'',parkingSpaces:vagas};
-    if(situacao==='Inquilino'){
-      unit.residentIds=names.map(function(){return uid()});
-      unit.residentEmails=names.map(function(_,i){return accessLines[i]||''});
-      unit.residentUsers=names.map(function(){return ''});
-    }
-    S.unidades.push(unit);renderLoading(accessLines.some(Boolean)?'Salvando unidade e preparando os acessos…':'Salvando unidade…');
-    try{await persistWorkspace()}catch(unitSaveError){S.unidades=S.unidades.filter(function(u){return u.id!==unitId});render();flash('Não foi possível salvar a unidade: '+(unitSaveError.message||unitSaveError));return}
-    unitTab='apartamentos';activeBlock=unit.bloco;view='unidades';
-    var invited=0,inviteErrors=[],existingLinks=[];
-    if(situacao==='Inquilino')for(var residentIndex=0;residentIndex<unit.residentIds.length;residentIndex++){
-      var residentEmail=unit.residentEmails[residentIndex];if(!residentEmail)continue;
-      var invite=await supabase.functions.invoke('morador-acesso',{body:{action:'invite',moradorId:unit.residentIds[residentIndex]}});
-      if(invite.error||invite.data&&invite.data.error){inviteErrors.push(residentEmail+': '+(invite.data&&invite.data.error||invite.error.message));continue}
-      if(invite.data&&invite.data.requiresExistingLogin&&invite.data.token){var inviteUrl=new URL(location.href);inviteUrl.searchParams.set('convite',invite.data.token);inviteUrl.hash='';existingLinks.push(residentEmail+' — '+inviteUrl.toString());RESIDENT_INVITES[unit.residentIds[residentIndex]]=true;continue}
-      RESIDENT_INVITES[unit.residentIds[residentIndex]]=true;invited++;
-    }
-    await loadWorkspace({user:USER});
-    if(existingLinks.length){var linksText='Links para vincular os acessos existentes:\n'+existingLinks.join('\n');try{await navigator.clipboard.writeText(linksText);flash(invited+' convite(s) enviado(s). Link(s) para conta(s) existente(s) copiado(s).')}catch(copyError){window.prompt('Copie e envie os links aos moradores:',linksText)}}
-    else if(inviteErrors.length)flash((invited?'Convites enviados: '+invited+'. ':'')+'Unidade salva; alguns convites falharam. Acesse Acessos dos moradores para tentar novamente. '+inviteErrors.join(' · '));
-    else if(invited)toast('Unidade cadastrada e '+invited+' convite(s) enviado(s)');
-    else toast('Unidade cadastrada');
-  }
+  if(id==='f-unit'){var dono=v('u-dono'),situacao=v('u-sit'),morador=v('u-morador')||(situacao==='Proprietário residente'?dono:'');if(situacao==='Inquilino'&&!morador){flash('Informe ao menos um inquilino');return}var vagas=Array.from(new Set(v('u-vagas').split(',').map(function(x){return x.trim()}).filter(Boolean))),unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+file.name,file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}S.unidades.push({id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:v('u-tel')||'—',situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||'',parkingSpaces:vagas});unitTab='apartamentos';activeBlock=v('u-bloco').toUpperCase();save();toast('Unidade cadastrada')}
   else if(id==='f-config'){S.config.taxaCondominio=parseFloat(v('cfg-taxa'))||0;S.config.vencimentoDia=parseInt(v('cfg-venc'),10)||10;S.unidades.forEach(function(u){u.taxa=S.config.taxaCondominio});save();toast('Taxa padrão salva e cobranças atualizadas')}
   else if(id==='f-agua'){var bad=saveReads('agua','aa-','ab-');if(bad){flash('A leitura atual da unidade '+bad+' não pode ser menor que a leitura anterior');return}S.config.contaMes[MES]=parseFloat(v('c-agua'))||0;S.config.tarifaAgua=parseFloat(v('c-agua-tarifa'))||0;S.config.modoAgua=v('c-modo');save();toast('Água salva e cobrança recalculada')}
   else if(id==='f-gas'){var bad2=saveReads('gas','ga-','gb-');if(bad2){flash('A leitura atual da unidade '+bad2+' não pode ser menor que a leitura anterior');return}S.config.tarifaMes[MES]=parseFloat(v('c-gas'))||0;save();toast('Gás salvo e cobrança recalculada')}

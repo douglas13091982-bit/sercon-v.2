@@ -27,6 +27,7 @@ function loadDemo(demoRole){
 }
 var S=seed();
 var saveQueue=Promise.resolve();
+var PORTARIA_CONFIG={habilitada:false,equipe:[]},PORTARIA_CONFIG_ERROR='',portariaCheckTimer=null;
 var MP_CONFIG={mode:null,method:null,mercadoPago:{publicKey:'',pix:true,cartao:true,boleto:true,hasAccessToken:false}}, MP_CONFIG_ERROR='';
 async function refreshPaymentConfig(){
   if(!supabase||!USER)return;
@@ -36,12 +37,12 @@ async function refreshPaymentConfig(){
   if(MP_CONFIG.method){var m=MP_CONFIG.method;S.meios=[{id:m.id,nome:m.nome,tipo:m.tipo,ativo:true,dados:m.dados_publicos||{},instrucoes:m.instrucoes||''}]}
   else S.meios=[];
 }
-function save(){if(DB_READY&&!DEMO)saveQueue=saveQueue.catch(function(){}).then(persistWorkspace).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
+function save(){if(DB_READY&&!DEMO)saveQueue=saveQueue.catch(function(){}).then(function(){return role==='portaria'?persistPortariaWorkspace():persistWorkspace()}).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
 
 var role='sindico', view='dashboard', toastMsg='', financeTab='cobrancas', unitTab='apartamentos', activeBlock='', activeUnitId='', editingTenant=false;
 var MY='A-302';
 var NAV={
-  sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['comunicacao','Comunicados e chamados']],
+  sindico:[['dashboard','Painel'],['unidades','Unidades e moradores'],['financeiro','Financeiro'],['taxas','Taxas adicionais'],['leituras','Leituras e rateios'],['portaria','Portaria'],['equipe_portaria','Equipe da portaria'],['comunicacao','Comunicados e chamados']],
   portaria:[['portaria','Portaria'],['comunicacao','Comunicados']],
   morador:[['minha','Início'],['pagamentos','Pagamentos'],['chamados','Chamados'],['encomendas','Encomendas'],['comunicacao','Comunicados']]
 };
@@ -91,7 +92,7 @@ function flash(m){var d=document.createElement('div');d.className='toast';d.setA
 function toast(m){toastMsg=m;render();setTimeout(function(){toastMsg='';render()},2200)}
 
 function shell(){
-  var items=NAV[role];
+  var items=NAV[role].filter(function(i){return role!=='sindico'||i[0]!=='portaria'||PORTARIA_CONFIG.habilitada});
   if(!items.some(function(i){return i[0]===view}))view=items[0][0];
   var pend=S.encomendas.filter(function(e){return !e.retirada}).length;
   var navHtml=items.map(function(i){
@@ -109,7 +110,7 @@ function shell(){
   var mobileLabels={minha:'Início',pagamentos:'Pagar',chamados:'Chamados',encomendas:'Encomendas',comunicacao:'Avisos'};
   var mobileNav=resident?'<nav class="resident-bottom-nav" aria-label="Navegação do morador">'+items.map(function(i){return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+residentIcons[i[0]]+'<span>'+mobileLabels[i[0]]+'</span></button>'}).join('')+'</nav>':'';
   var residentHeader=resident?'<header class="resident-app-header"><div class="resident-app-brand"><div class="brand-mark">C</div><div><b>CondoGestor</b><small>'+esc(COND)+'</small></div></div><label class="resident-month"><span>Mês</span><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></label></header>':'';
-  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
+  var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,equipe_portaria:vEquipePortaria,comunicacao:vComm,minha:vMinha,pagamentos:vTenantPayment,chamados:function(){return vTenantCalls(MY)},encomendas:vTenantEncomendas}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
     '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span><label for="demo-role">Visualizar como</label><select id="demo-role"><option value="sindico"'+(role==='sindico'?' selected':'')+'>Síndico</option><option value="morador"'+(role==='morador'?' selected':'')+'>Morador</option></select>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
     (resident?'':'<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div>')+'<nav>'+navHtml+'</nav></aside><main class="'+(resident?'resident-main':'')+'">'+residentHeader+body+mobileNav+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
@@ -123,19 +124,52 @@ function renderAuth(){
   setShell(false);
   if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Acesse o sistema</h2><p class="note">Entre em uma demonstração agora ou configure o acesso do condomínio.</p><button class="btn" type="button" data-demo-access>Acessar demonstração do síndico</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-resident>Acessar módulo do morador</button><p class="note" style="margin-top:12px">Para login e cadastro com salvamento de dados, configure o Supabase neste ambiente. A demonstração usa exemplos e não salva alterações.</p></div></main>';return}
   var reg=authMode==='register';
-  app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com o e-mail e a senha do síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
+  app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com seu e-mail e senha. Porteiros e vigilantes entram com o acesso enviado pelo síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
   '<form class="f" id="f-auth">'+(reg?'<label>Seu nome<input id="a-nome" required autocomplete="name"></label><label>Nome do condomínio<input id="a-cond" required></label><label>CNPJ (opcional)<input id="a-cnpj" inputmode="numeric"></label><label class="wide">Endereço (opcional)<input id="a-endereco" autocomplete="street-address"></label><label>Telefone do condomínio<input id="a-telefone" type="tel"></label><label>Condomínio mensal padrão (R$)<input id="a-taxa" type="number" min="0" step="0.01" value="0" required></label><label>Vencimento da cobrança (dia)<input id="a-venc" type="number" min="1" max="28" value="10" required></label><label>Água<select id="a-agua"><option value="rateio">Rateio da conta do condomínio</option><option value="individual">Medidor e cobrança individual</option></select></label><label>Tarifa água (R$/m³)<input id="a-agua-tarifa" type="number" min="0" step="0.0001" value="0"></label><label>Tarifa gás (R$/m³)<input id="a-gas" type="number" min="0" step="0.0001" value="0"></label>':'')+
   '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-access>Demonstração do síndico</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-resident>Acessar módulo do morador</button><p class="note" style="text-align:center;margin-top:8px">Demonstração com dados de exemplo; alterações não serão salvas.</p></div></main>';
 }
 function renderLoading(message){setShell(false);document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
 function dbRows(table){return supabase.from(table).select('*').then(function(r){if(r.error)throw r.error;return r.data||[]})}
+async function refreshPortariaConfig(){
+  if(!supabase||!USER||DEMO)return;
+  var result=await supabase.functions.invoke('portaria-equipe',{body:{action:'get'}});
+  if(result.error){PORTARIA_CONFIG={habilitada:false,equipe:[]};PORTARIA_CONFIG_ERROR='Não foi possível carregar as configurações da portaria. Publique as funções e aplique as migrações.';return}
+  PORTARIA_CONFIG=result.data||{habilitada:false,equipe:[]};PORTARIA_CONFIG_ERROR='';
+}
+async function loadPortariaWorkspace(session,profile){
+  if(portariaCheckTimer)clearInterval(portariaCheckTimer);
+  var result=await supabase.functions.invoke('portaria-workspace',{body:{action:'list'}});
+  if(result.error)throw result.error;
+  if(result.data&&result.data.error)throw new Error(result.data.error);
+  var data=result.data||{};if(!data.habilitada)throw new Error('O síndico desabilitou o módulo Portaria.');
+  CONDO_ID=profile.condominio_id;COND=(data.condominio&&data.condominio.nome)||'Condomínio';
+  S=seed();S.unidades=(data.unidades||[]).map(function(u){var residents=u.moradores||[];return {id:u.id,bloco:u.bloco||'',apto:u.numero||'',dono:'',morador:residents.map(function(m){return m.nome}).join(', ')||'—',tel:(residents.find(function(m){return m.telefone})||{}).telefone||'—',situacao:'Ocupado',taxa:0,aluguel:0,leituras:{},pago:{}}});
+  var labelById={};S.unidades.forEach(function(u){labelById[u.id]=uLabel(u)});
+  S.visitantes=(data.visitantes||[]).map(function(x){return {id:x.id,nome:x.nome,doc:x.documento||'',unidade:labelById[x.unidade_id]||'',entrada:x.entrada_em,saida:x.saida_em||''}});
+  S.prestadores=(data.prestadores||[]).map(function(x){return {id:x.id,nome:x.nome,empresa:x.empresa||'',servico:x.servico,doc:x.documento||'',unidade:labelById[x.unidade_id]||'',autorizado:x.autorizado_por||'',entrada:x.entrada_em,saida:x.saida_em||''}});
+  S.veiculos=(data.veiculos||[]).map(function(x){return {id:x.id,placa:x.placa,modelo:x.modelo,cor:x.cor||'',tipo:x.tipo==='morador'?'Morador':x.tipo==='visitante'?'Visitante':'Prestador',unidade:labelById[x.unidade_id]||'',vaga:x.vaga||'',entrada:x.entrada_em||'',saida:x.saida_em||''}});
+  S.encomendas=(data.encomendas||[]).map(function(x){return {id:x.id,unidade:labelById[x.unidade_id]||'',transp:x.transportadora||'',chegada:x.chegada_em,retirada:x.retirada_em||'',avisado:x.avisado_em||''}});
+  S.comunicados=(data.comunicados||[]).map(function(x){return {id:x.id,titulo:x.titulo,texto:x.conteudo,data:(x.criado_em||'').slice(0,10)}});
+  DB_READY=true;role='portaria';setMes(MES);view='portaria';render();
+  portariaCheckTimer=setInterval(async function(){
+    var check=await supabase.functions.invoke('portaria-workspace',{body:{action:'list'}});
+    var denied=check.data&&check.data.error==='O síndico desabilitou o módulo Portaria.';
+    if(check.error&&check.error.context&&check.error.context.status===403)denied=true;
+    if(denied){clearInterval(portariaCheckTimer);portariaCheckTimer=null;DB_READY=false;S=seed();authNotice='O síndico desabilitou o módulo Portaria ou removeu seu acesso.';renderAuth()}
+  },30000);
+}
 async function loadWorkspace(session){
   USER=session.user;
   var profileRes=await supabase.from('profiles').select('nome,email,condominio_id').eq('id',USER.id).maybeSingle();
   if(profileRes.error)throw profileRes.error;
   var rolesRes=await supabase.from('user_roles').select('role').eq('user_id',USER.id);
   if(rolesRes.error)throw rolesRes.error;
-  if(!(rolesRes.data||[]).some(function(x){return x.role==='sindico'||x.role==='super_admin'}))throw new Error('Esta conta ainda não está vinculada ao perfil de síndico.');
+  var userRoles=rolesRes.data||[];
+  if(userRoles.some(function(x){return x.role==='porteiro'})&&!userRoles.some(function(x){return x.role==='sindico'||x.role==='super_admin'})){
+    if(!profileRes.data||!profileRes.data.condominio_id)throw new Error('Esta conta de portaria ainda não está vinculada a um condomínio.');
+    await loadPortariaWorkspace(session,profileRes.data);return;
+  }
+  if(!userRoles.some(function(x){return x.role==='sindico'||x.role==='super_admin'}))throw new Error('Esta conta ainda não está vinculada ao perfil do condomínio.');
   CONDO_ID=profileRes.data&&profileRes.data.condominio_id;
   if(!CONDO_ID)throw new Error('Esta conta não possui condomínio vinculado. Entre novamente pelo cadastro de síndico.');
   var result=await Promise.all(['condominios','blocos','unidades','moradores','configuracoes_financeiras','financeiro_competencias','leituras_consumo','cobrancas_unidade','cobrancas_taxas_adicionais','taxas_adicionais','taxas_adicionais_unidades','meios_pagamento_condominio','pagamentos_morador','despesas_condominio','veiculos_condominio','acessos_prestadores','visitantes','encomendas','comunicados','chamados'].map(dbRows));
@@ -167,7 +201,13 @@ async function loadWorkspace(session){
   S.comunicados=D.comunicados.map(function(x){return {id:x.id,titulo:x.titulo,texto:x.conteudo,data:x.criado_em.slice(0,10)}});
   S.chamados=D.chamados.map(function(x){var u=S.unidades.find(function(y){return y.id===x.unidade_id});return {id:x.id,unidade:u?uLabel(u):'',titulo:x.titulo,status:x.status==='resolvido'?'Resolvido':x.status==='em_andamento'?'Em andamento':'Aberto',data:x.criado_em.slice(0,10)}});
   var generated=await supabase.rpc('gerar_cobrancas_condominio',{_competencia:MES+'-01'});if(generated.error)throw generated.error;
-  DB_READY=true;role='sindico';setMes(MES);view='dashboard';render();
+  DB_READY=true;role='sindico';setMes(MES);view='dashboard';await refreshPortariaConfig();render();
+}
+async function persistPortariaWorkspace(){
+  if(!supabase||!USER||!CONDO_ID)return;
+  var result=await supabase.functions.invoke('portaria-workspace',{body:{action:'save',visitantes:S.visitantes,prestadores:S.prestadores,veiculos:S.veiculos,encomendas:S.encomendas}});
+  if(result.error)throw result.error;
+  if(result.data&&result.data.error)throw new Error(result.data.error);
 }
 async function persistWorkspace(){
   if(!supabase||!USER||!CONDO_ID)return;
@@ -464,6 +504,15 @@ function vPortaria(){
   return head('Portaria','Visitantes, prestadores de serviço, veículos e encomendas')+bar+body;
 }
 
+function vEquipePortaria(){
+  var staff=(PORTARIA_CONFIG.equipe||[]).map(function(x){return '<div class="item"><div><b>'+esc(x.nome||'Porteiro')+'</b><p>'+esc(x.email||'')+' · '+esc(x.status||'Acesso ativo')+'</p></div><button class="btn sm danger" type="button" data-portaria-remove="'+esc(x.id)+'">Remover acesso</button></div>'}).join('')||'<p class="empty">Nenhum porteiro ou vigilante cadastrado.</p>';
+  var enabled=PORTARIA_CONFIG.habilitada;
+  return head('Equipe da portaria','Habilite o módulo e convide os profissionais que terão acesso à portaria.')+
+    (PORTARIA_CONFIG_ERROR?'<p class="pill warn">'+esc(PORTARIA_CONFIG_ERROR)+'</p>':'')+
+    '<div class="panel"><h3>Módulo Portaria</h3><p class="note">Quando desabilitado, a equipe não consegue acessar registros de visitantes, veículos ou encomendas.</p><form class="f" id="f-portaria-settings"><label class="wide chk"><input id="portaria-enabled" type="checkbox" '+(enabled?'checked':'')+'> Habilitar o módulo Portaria neste condomínio</label><button class="btn" type="submit">Salvar configuração</button></form></div>'+
+    '<div class="grid"><div class="panel"><h3>Convidar porteiro ou vigilante</h3>'+(enabled?'<p class="note">O profissional receberá um convite por e-mail para criar a senha de acesso.</p><form class="f" id="f-portaria-staff"><label>Nome<input id="staff-nome" required autocomplete="name"></label><label>E-mail<input id="staff-email" type="email" required autocomplete="email"></label><button class="btn" type="submit">Enviar convite</button></form>':'<p class="note">Habilite o módulo para convidar profissionais.</p>')+'</div><div class="panel"><h3>Acessos cadastrados</h3><div class="list">'+staff+'</div></div></div>';
+}
+
 function vComm(){
   var sind=role==='sindico';
   var not=S.comunicados.slice().sort(function(a,b){return b.data.localeCompare(a.data)}).map(function(n){return '<div class="item"><div><b>'+esc(n.titulo)+'</b><p>'+esc(n.texto)+'</p><p class="num" style="font-size:12px">'+fmtD(n.data)+'</p></div>'+(sind?'<button class="btn sm danger" data-del-not="'+n.id+'">Excluir</button>':'')+'</div>'}).join('');
@@ -554,7 +603,8 @@ document.addEventListener('click',async function(e){
   var vacate=e.target.closest('[data-vacate]');if(vacate){var leaving=S.unidades.find(function(u){return u.id===vacate.dataset.vacate});if(!leaving||leaving.situacao!=='Inquilino')return;if(!window.confirm('Registrar a saída do(s) inquilino(s) de '+uLabel(leaving)+'? O apartamento e os dados do bloco serão mantidos.'))return;var deleted=await supabase.from('moradores').delete().eq('condominio_id',CONDO_ID).eq('unidade_id',leaving.id).eq('tipo','inquilino');if(deleted.error){flash('Não foi possível registrar a desocupação: '+deleted.error.message);return}leaving.morador='—';leaving.tel='—';leaving.situacao='Vago';leaving.aluguel=0;leaving.residentIds=[];leaving.contractStart=null;leaving.contractEnd=null;leaving.pago={};activeUnitId=leaving.id;editingTenant=false;save();await saveQueue;toast('Unidade '+uLabel(leaving)+' marcada como vaga');return}
   var authButton=e.target.closest('[data-auth-mode]');
   if(authButton){authMode=authMode==='register'?'login':'register';authNotice='';renderAuth();return}
-  if(e.target.closest('[data-signout]')){DB_READY=false;USER=null;CONDO_ID='';supabase.auth.signOut().then(function(){renderAuth()});return}
+  if(e.target.closest('[data-signout]')){if(portariaCheckTimer)clearInterval(portariaCheckTimer);DB_READY=false;USER=null;CONDO_ID='';supabase.auth.signOut().then(function(){renderAuth()});return}
+  var removePortaria=e.target.closest('[data-portaria-remove]');if(removePortaria){if(!window.confirm('Remover o acesso deste profissional à portaria?'))return;var removedPortaria=await supabase.functions.invoke('portaria-equipe',{body:{action:'remove',userId:removePortaria.dataset.portariaRemove}});if(removedPortaria.error){flash('Não foi possível remover o acesso: '+removedPortaria.error.message);return}await refreshPortariaConfig();render();flash('Acesso removido');return}
   var aw=e.target.closest('a[data-aviso]');
   if(aw){var pk=S.encomendas.filter(function(x){return x.id===aw.dataset.aviso})[0];if(pk){pk.avisado=now();save();setTimeout(render,80)}return}
   var t=e.target.closest('button');if(!t)return;
@@ -605,6 +655,17 @@ document.addEventListener('submit',async function(e){
     }catch(err){DB_READY=false;USER=null;authNotice=err.message||'Não foi possível acessar o sistema.';renderAuth()}})();return;
   }
   if(DEMO){flash('A demonstração é somente para consulta. As alterações não serão salvas.');return}
+  if(id==='f-portaria-settings'){
+    var configResult=await supabase.functions.invoke('portaria-equipe',{body:{action:'set-enabled',enabled:document.getElementById('portaria-enabled').checked}});
+    if(configResult.error){flash('Não foi possível salvar: '+configResult.error.message);return}
+    await refreshPortariaConfig();if(!PORTARIA_CONFIG.habilitada&&view==='portaria')view='equipe_portaria';render();flash(PORTARIA_CONFIG.habilitada?'Módulo Portaria habilitado':'Módulo Portaria desabilitado');return;
+  }
+  if(id==='f-portaria-staff'){
+    var inviteName=v('staff-nome'),inviteEmail=v('staff-email');
+    var inviteResult=await supabase.functions.invoke('portaria-equipe',{body:{action:'invite',nome:inviteName,email:inviteEmail}});
+    if(inviteResult.error){flash('Não foi possível enviar o convite: '+inviteResult.error.message);return}
+    await refreshPortariaConfig();render();flash(inviteResult.data&&inviteResult.data.inviteSent?'Convite enviado para '+inviteEmail:'Acesso liberado para '+inviteEmail);return;
+  }
   if(id==='f-payment-config'){
     var modeField=e.target.querySelector('[name="payment-mode"]:checked');
     if(!modeField){flash('Escolha Pix manual ou Mercado Pago.');return}

@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 (function(){
-var MES=new Date().toISOString().slice(0,7), MES_LABEL='', COND='', CONDO_ID='', USER=null, DB_READY=false, BLOCK_IDS={};
+var MES=new Date().toISOString().slice(0,7), MES_LABEL='', COND='', CONDO_ID='', USER=null, DB_READY=false, DEMO=false, BLOCK_IDS={};
 var supabaseUrl=import.meta.env.VITE_SUPABASE_URL;
 var supabaseKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 var supabase=(supabaseUrl&&supabaseKey)?createClient(supabaseUrl,supabaseKey):null;
@@ -13,9 +13,20 @@ var fmtDT=function(s){if(!s)return '';var d=new Date(s);return d.toLocaleString(
 var fmtD=function(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]};
 
 function seed(){return {config:{tarifaGas:0,tarifaAgua:0,taxaCondominio:0,vencimentoDia:10,contaAgua:0,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}},prestadores:[],veiculos:[],meios:[],pagamentos:[],taxas:[],unidades:[],historico:[],despesas:[],visitantes:[],encomendas:[],comunicados:[],chamados:[]}}
+function loadDemo(){
+  DEMO=true;DB_READY=true;role='sindico';view='dashboard';COND='Residencial Jardim das Flores';CONDO_ID='demo';USER={email:'demonstração'};setMes(MES);S=seed();
+  S.config={tarifaGas:7.5,tarifaAgua:0,taxaCondominio:320,vencimentoDia:10,contaAgua:780,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}};S.config.contaMes[MES]=780;S.config.tarifaMes[MES]=7.5;
+  var unit=function(id,bloco,apto,dono,morador,tel,situacao,aluguel,gas,agua,pago){var u={id:id,bloco:bloco,apto:apto,dono:dono,morador:morador,tel:tel,situacao:situacao,taxa:320,aluguel:aluguel,leituras:{},pago:{},gasMeter:'G-'+apto,waterMeter:'A-'+apto};u.leituras[MES]={gas:[gas-5,gas],agua:[agua-4,agua]};if(pago)u.pago[MES]=true;return u};
+  S.unidades=[unit('demo-a101','A','101','Marcos Silva','João e Ana Lima','(47) 99911-2233','Inquilino',1600,42,36,true),unit('demo-a102','A','102','Carla Souza','Carla Souza','(47) 99922-3344','Proprietário residente',0,31,28,true),unit('demo-a103','A','103','Paulo Mendes','—','(47) 99933-4455','Vago',0,0,0,false),unit('demo-b201','B','201','Renata Costa','Renata Costa','(47) 99944-5566','Proprietário residente',0,28,23,false),unit('demo-b202','B','202','Luiz Ferreira','Pedro Alves','(47) 99955-6677','Inquilino',1350,37,31,false),unit('demo-c301','C','301','Fernanda Rocha','Fernanda Rocha','(47) 99966-7788','Proprietário residente',0,34,26,true)];
+  S.taxas=[{id:'demo-taxa-1',nome:'Fundo de reserva',valor:90,modo:'rateio',aplica:'ocupadas',unidades:[],inicio:MES,fim:''}];
+  S.despesas=[{id:'demo-d1',desc:'Manutenção do elevador',cat:'Manutenção',valor:680,data:MES+'-05',fornecedor:'Elevatec'},{id:'demo-d2',desc:'Limpeza das áreas comuns',cat:'Serviços',valor:420,data:MES+'-11',fornecedor:'Equipe Limpa'}];
+  S.visitantes=[{id:'demo-v1',nome:'Roberto Almeida',doc:'***.***.***-12',unidade:'A-101',entrada:now(),saida:''}];S.encomendas=[{id:'demo-e1',unidade:'B-202',transp:'Correios',chegada:now(),retirada:'',avisado:''}];
+  S.chamados=[{id:'demo-c1',unidade:'A-102',titulo:'Lâmpada queimada no corredor',status:'Aberto',data:MES+'-09'},{id:'demo-c2',unidade:'B-202',titulo:'Verificar vazamento na cozinha',status:'Em andamento',data:MES+'-12'}];S.comunicados=[{id:'demo-n1',titulo:'Limpeza da caixa d’água',texto:'A limpeza será realizada na próxima terça-feira, das 9h às 12h.',data:MES+'-02'}];
+  S.meios=[{id:'demo-m1',nome:'PIX do condomínio',tipo:'pix',ativo:true,dados:{chave:'financeiro@jardimdasflores.com.br',favorecido:'Residencial Jardim das Flores'},instrucoes:'Informe o pagamento para conferência.'}];S.pagamentos=[{id:'demo-p1',unidadeId:'demo-b202',unidade:'B-202',mes:MES,valor:410,meio:'PIX',data:now(),status:'Aguardando conferência'}];S.historico=[['Mai',2800,1050],['Jun',3120,980],['Jul',2950,1210],['Ago',3280,920],['Set',3050,1140],['Out',3260,1100]];render();
+}
 var S=seed();
 var saveQueue=Promise.resolve();
-function save(){if(DB_READY)saveQueue=saveQueue.catch(function(){}).then(persistWorkspace).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
+function save(){if(DB_READY&&!DEMO)saveQueue=saveQueue.catch(function(){}).then(persistWorkspace).catch(function(e){flash('Não foi possível salvar no banco: '+(e.message||e))})}
 
 var role='sindico', view='dashboard', toastMsg='';
 var MY='A-302';
@@ -78,7 +89,7 @@ function shell(){
     return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+i[1]+c+'</button>'}).join('');
   var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,pagamentos:vPag,portaria:vPortaria,comunicacao:vComm,minha:vMinha}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
-    '<div class="roles"><label>Sessão</label><button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
+    '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
     '<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div><nav>'+navHtml+'</nav></aside><main>'+body+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
 }
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
@@ -88,11 +99,11 @@ function setShell(on){var app=document.getElementById('app');if(app)app.classNam
 function renderAuth(){
   var app=document.getElementById('app');
   setShell(false);
-  if(!supabase){app.innerHTML='<main class="panel"><h2>Conectar o Supabase</h2><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY no ambiente do projeto para habilitar cadastro e salvamento.</p></main>';return}
+  if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Acesse o sistema</h2><p class="note">Entre em uma demonstração agora ou configure o acesso do condomínio.</p><button class="btn" type="button" data-demo-access>Acessar demonstração sem criar conta</button><p class="note" style="margin-top:12px">Para login e cadastro com salvamento de dados, configure o Supabase neste ambiente.</p></div></main>';return}
   var reg=authMode==='register';
   app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com o e-mail e a senha do síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
   '<form class="f" id="f-auth">'+(reg?'<label>Seu nome<input id="a-nome" required autocomplete="name"></label><label>Nome do condomínio<input id="a-cond" required></label><label>CNPJ (opcional)<input id="a-cnpj" inputmode="numeric"></label><label class="wide">Endereço (opcional)<input id="a-endereco" autocomplete="street-address"></label><label>Telefone do condomínio<input id="a-telefone" type="tel"></label><label>Condomínio mensal padrão (R$)<input id="a-taxa" type="number" min="0" step="0.01" value="0" required></label><label>Vencimento da cobrança (dia)<input id="a-venc" type="number" min="1" max="28" value="10" required></label><label>Água<select id="a-agua"><option value="rateio">Rateio da conta do condomínio</option><option value="individual">Medidor e cobrança individual</option></select></label><label>Tarifa água (R$/m³)<input id="a-agua-tarifa" type="number" min="0" step="0.0001" value="0"></label><label>Tarifa gás (R$/m³)<input id="a-gas" type="number" min="0" step="0.0001" value="0"></label>':'')+
-  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button></div></main>';
+  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-access>Acessar demonstração sem criar conta</button><p class="note" style="text-align:center;margin-top:8px">Demonstração com dados de exemplo; alterações não serão salvas.</p></div></main>';
 }
 function renderLoading(message){setShell(false);document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
 function dbRows(table){return supabase.from(table).select('*').then(function(r){if(r.error)throw r.error;return r.data||[]})}
@@ -483,6 +494,8 @@ document.addEventListener('change',function(e){
   if(e.target.id==='p-tipo'){var tp=e.target.value;document.querySelectorAll('#f-meio [data-tipos]').forEach(function(el){el.hidden=el.dataset.tipos.split(' ').indexOf(tp)<0})}
 });
 document.addEventListener('click',async function(e){
+  if(e.target.closest('[data-demo-access]')){loadDemo();return}
+  if(DEMO){var demoNav=e.target.closest('[data-nav]');if(demoNav){view=demoNav.dataset.nav;render();return}if(e.target.closest('[data-signout]')){DEMO=false;DB_READY=false;USER=null;CONDO_ID='';COND='';S=seed();renderAuth();return}if(e.target.closest('button'))flash('A demonstração é somente para consulta. As alterações não serão salvas.');return}
   var authButton=e.target.closest('[data-auth-mode]');
   if(authButton){authMode=authMode==='register'?'login':'register';authNotice='';renderAuth();return}
   if(e.target.closest('[data-signout]')){DB_READY=false;USER=null;CONDO_ID='';supabase.auth.signOut().then(function(){renderAuth()});return}
@@ -535,6 +548,7 @@ document.addEventListener('submit',async function(e){
       }
     }catch(err){DB_READY=false;USER=null;authNotice=err.message||'Não foi possível acessar o sistema.';renderAuth()}})();return;
   }
+  if(DEMO){flash('A demonstração é somente para consulta. As alterações não serão salvas.');return}
   if(id==='f-unit'){var dono=v('u-dono'),situacao=v('u-sit'),morador=v('u-morador')||(situacao==='Proprietário residente'?dono:'');if(situacao==='Inquilino'&&!morador){flash('Informe ao menos um inquilino');return}var unitId=uid(),file=document.getElementById('u-contrato').files[0],contractPath='';if(file){if(file.size>10*1024*1024){flash('O contrato deve ter no máximo 10 MB');return}var uploaded=await supabase.storage.from('contratos-locacao').upload(CONDO_ID+'/'+unitId+'/'+file.name,file,{upsert:true,contentType:file.type});if(uploaded.error){flash('Falha ao anexar contrato: '+uploaded.error.message);return}contractPath=uploaded.data.path}S.unidades.push({id:unitId,bloco:v('u-bloco').toUpperCase(),apto:v('u-apto'),dono:dono,morador:morador||'—',tel:v('u-tel')||'—',situacao:situacao,taxa:S.config.taxaCondominio,aluguel:parseFloat(v('u-alu'))||0,leituras:{},pago:{},contractPath:contractPath,contractName:file&&file.name,contractStart:v('u-inicio')||null,contractEnd:v('u-fim')||null,gasMeter:v('u-gas')||'',waterMeter:v('u-agua')||''});save();toast('Unidade cadastrada')}
   else if(id==='f-config'){S.config.taxaCondominio=parseFloat(v('cfg-taxa'))||0;S.config.vencimentoDia=parseInt(v('cfg-venc'),10)||10;S.unidades.forEach(function(u){u.taxa=S.config.taxaCondominio});save();toast('Taxa padrão salva e cobranças atualizadas')}
   else if(id==='f-agua'){var bad=saveReads('agua','aa-','ab-');if(bad){flash('A leitura atual da unidade '+bad+' não pode ser menor que a leitura anterior');return}S.config.contaMes[MES]=parseFloat(v('c-agua'))||0;S.config.tarifaAgua=parseFloat(v('c-agua-tarifa'))||0;S.config.modoAgua=v('c-modo');save();toast('Água salva e cobrança recalculada')}

@@ -299,6 +299,7 @@ async function persistWorkspace(){
   var competencia=MES+'-01';
   var fee={condominio_id:CONDO_ID,competencia:competencia,conta_agua:Number(contaAguaDe(MES)||0),tarifa_gas_m3:Number(tarifaDe(MES)||0),modo_rateio_agua:S.config.modoAgua==='igual'?'igual':'consumo',incluir_aluguel_na_cobranca:!!S.config.cobrarAluguel,updated_by:USER.id,updated_at:new Date().toISOString()};
   ok(await supabase.from('financeiro_competencias').upsert(fee,{onConflict:'condominio_id,competencia'}));
+  if(!S.config.cobrarAluguel)ok(await supabase.from('cobrancas_unidade').delete().eq('condominio_id',CONDO_ID).eq('competencia',competencia).eq('tipo','aluguel').eq('status','pendente'));
   var readings=[];
   S.unidades.forEach(function(u){
     Object.keys(u.leituras||{}).forEach(function(m){

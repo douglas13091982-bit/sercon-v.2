@@ -116,6 +116,11 @@ form.f label.chk{flex-direction:row;align-items:center;gap:6px;color:var(--fg);f
 .unit-tile-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .unit-tile p{margin:4px 0 0;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .unit-detail-head,.unit-detail-actions{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.unit-modal-backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(10,20,28,.62);overscroll-behavior:contain}
+.unit-detail{width:min(760px,100%);max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px);overflow-y:auto;margin:0;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+.unit-detail>h4{margin:18px 0 4px}
+.unit-modal-open{overflow:hidden}
+@media(max-width:520px){.unit-modal-backdrop{padding:10px}.unit-detail{max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px)}}
 .unit-detail-head h3,.unit-detail-head p{margin:0}
 .unit-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:14px 0}
 .unit-detail-grid>div{background:var(--surface-2);border-radius:7px;padding:9px}

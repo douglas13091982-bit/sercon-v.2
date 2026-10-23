@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 30577)
-Total output lines: 843
-
 import { createClient } from "@supabase/supabase-js";
 
 (function(){
@@ -410,7 +407,26 @@ function vTaxas(){
     var aplic=t.aplica==='todas'?'Todos os apartamentos':t.aplica==='ocupadas'?'Apartamentos ocupados':'Escolhidos: '+alvo.map(uLabel).join(', ');
     var st=vig?'<span class="pill ok">Ativa</span>':(MES<t.inicio?'<span class="pill warn">Começa em '+mesCurto(t.inicio)+'</span>':'<span class="pill mute">Encerrada</span>');
     return '<tr><td><b>'+esc(t.nome)+'</b></td><td class="num">'+brl(t.valor)+(t.modo==='rateio'?' no total':' por apto')+'</td><td>'+aplic+'</td><td class="num">'+(vig?brl(por)+' por apto':'—')+'</td><td class="num">'+mesCurto(t.inicio)+(t.fim?' a '+mesCurto(t.fim):' em diante')+'</td><td>'+st+'</td><td><div class="row-actions">'+(vig&&!t.fim?'<button class="btn sm ghost" data-end-taxa="'+t.id+'">Encerrar após este mês</button>':'')+'<button class="btn sm danger" data-del-taxa="'+t.id+'">Excluir</button></div></td></tr>'}).join('');
-  return head('Taxas adicion…577 tokens truncated…artao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
+  return head('Taxas adicionais','Lixo, esgoto, fundo de reserva e outras cobranças por apartamento')+
+  '<div class="panel"><h3>Nova taxa</h3><form class="f" id="f-taxa">'+
+   '<label>Nome da taxa<input id="t-nome" required placeholder="Taxa de lixo"></label>'+
+   '<label>Valor (R$)<input id="t-valor" type="number" min="0.01" step="0.01" required></label>'+
+   '<label>Como cobrar<select id="t-modo"><option value="fixa">Valor fixo por apartamento</option><option value="rateio">Valor total dividido entre os apartamentos</option></select></label>'+
+   '<label>Cobrar de<select id="t-aplica"><option value="todas">Todos os apartamentos</option><option value="ocupadas">Somente apartamentos ocupados</option><option value="selecionadas">Apenas os marcados abaixo</option></select></label>'+
+   '<label>A partir de<select id="t-ini">'+mo(MES)+'</select></label>'+
+   '<label>Até<select id="t-fim"><option value="">Sem data final</option>'+mo('')+'</select></label>'+
+   '<div class="wide"><span style="font-size:12px;color:var(--muted)">Apartamentos (vale só para "Apenas os marcados")</span><div class="checks">'+
+    S.unidades.map(function(u){return '<label class="chk"><input type="checkbox" id="tu-'+u.id+'">'+uLabel(u)+'</label>'}).join('')+'</div></div>'+
+   '<button class="btn" type="submit">Cadastrar taxa</button></form>'+
+  '<p class="note">Total de taxas adicionais em '+MES_LABEL+': <b class="num">'+brl(somaMes)+'</b>. Cada taxa entra no total a pagar de cada apartamento na aba Financeiro.</p>'+
+  '<div class="tablewrap"><table><thead><tr><th>Taxa</th><th>Valor</th><th>Cobrada de</th><th>Em '+mesCurto(MES)+'</th><th>Vigência</th><th>Situação</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="empty">Nenhuma taxa adicional cadastrada.</td></tr>')+'</tbody></table></div></div>';
+}
+
+var TIPOS={pix:'PIX',transferencia:'Transferência bancária',boleto:'Boleto',dinheiro:'Dinheiro ou cheque',mercadopago:'Mercado Pago'};
+function meioResumo(m){var d=m.dados||{};
+  if(m.tipo==='pix')return esc((d.tipoChave||'Chave')+': '+(d.chave||'—')+(d.favorecido?' · '+d.favorecido:''));
+  if(m.tipo==='transferencia')return esc((d.banco||'Banco')+' · ag. '+(d.agencia||'—')+' · conta '+(d.conta||'—')+(d.favorecido?' · '+d.favorecido:''));
+  if(m.tipo==='mercadopago'){var f=[['pix','Pix'],['cartao','cartão'],['boleto','boleto']].filter(function(x){return d[x[0]]}).map(function(x){return x[1]}).join(', ');return esc('Checkout Mercado Pago · aceita '+(f||'—'))}
   return esc(m.instrucoes||'—')}
 function g(tipos,html){return '<label data-tipos="'+tipos+'"'+(tipos.split(' ').indexOf('pix')<0?' hidden':'')+'>'+html+'</label>'}
 function vPag(inFinance){

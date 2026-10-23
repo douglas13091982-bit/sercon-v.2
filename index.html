@@ -107,16 +107,22 @@ form.f label.chk{flex-direction:row;align-items:center;gap:6px;color:var(--fg);f
   .head h2{font-size:22px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-.block-board{display:flex;gap:14px;align-items:flex-start;overflow-x:auto;padding-bottom:8px}
-.block-column{flex:0 0 min(320px,85vw);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.block-board{display:block;padding-bottom:8px}
+.block-column{width:100%;max-width:none;flex:none;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px}
 .block-column>h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
-.unit-tile{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px;margin:8px 0}
+.unit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}
+.unit-tile{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px;margin:0;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.unit-tile:hover,.unit-tile:focus-visible{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);outline:none}
 .unit-tile-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
-.unit-tile p{margin:5px 0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
-.unit-tile-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}
-.unit-tile-stats div{background:var(--surface-2);border-radius:6px;padding:7px;font-size:12px}
-.unit-tile-stats b{display:block;color:var(--fg);font-size:14px}
-.unit-tile-actions{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px}
+.unit-tile p{margin:4px 0 0;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.unit-detail-head,.unit-detail-actions{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.unit-detail-head h3,.unit-detail-head p{margin:0}
+.unit-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:14px 0}
+.unit-detail-grid>div{background:var(--surface-2);border-radius:7px;padding:9px}
+.unit-detail-grid small{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+.unit-detail-grid b{overflow-wrap:anywhere}
+.unit-detail-actions{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+@media(max-width:520px){.unit-detail-actions{align-items:flex-start;flex-direction:column}}
 </style>
 
 <div class="shell" id="app"></div>

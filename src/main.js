@@ -13,8 +13,8 @@ var fmtDT=function(s){if(!s)return '';var d=new Date(s);return d.toLocaleString(
 var fmtD=function(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]};
 
 function seed(){return {config:{tarifaGas:0,tarifaAgua:0,taxaCondominio:0,vencimentoDia:10,contaAgua:0,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}},prestadores:[],veiculos:[],meios:[],pagamentos:[],taxas:[],unidades:[],historico:[],despesas:[],visitantes:[],encomendas:[],comunicados:[],chamados:[]}}
-function loadDemo(){
-  DEMO=true;DB_READY=true;role='sindico';view='dashboard';COND='Residencial Jardim das Flores';CONDO_ID='demo';USER={email:'demonstração'};setMes(MES);S=seed();
+function loadDemo(demoRole){
+  DEMO=true;DB_READY=true;role=demoRole==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';COND='Residencial Jardim das Flores';CONDO_ID='demo';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};MY='A-101';setMes(MES);S=seed();
   S.config={tarifaGas:7.5,tarifaAgua:0,taxaCondominio:320,vencimentoDia:10,contaAgua:780,modoAgua:'consumo',cobrarAluguel:false,contaMes:{},tarifaMes:{}};S.config.contaMes[MES]=780;S.config.tarifaMes[MES]=7.5;
   var unit=function(id,bloco,apto,dono,morador,tel,situacao,aluguel,gas,agua,pago){var u={id:id,bloco:bloco,apto:apto,dono:dono,morador:morador,tel:tel,situacao:situacao,taxa:320,aluguel:aluguel,leituras:{},pago:{},gasMeter:'G-'+apto,waterMeter:'A-'+apto,parkingSpaces:[]};u.leituras[MES]={gas:[gas-5,gas],agua:[agua-4,agua]};if(pago)u.pago[MES]=true;return u};
   S.unidades=[unit('demo-a101','A','101','Marcos Silva','João e Ana Lima','(47) 99911-2233','Inquilino',1600,42,36,true),unit('demo-a102','A','102','Carla Souza','Carla Souza','(47) 99922-3344','Proprietário residente',0,31,28,true),unit('demo-a103','A','103','Paulo Mendes','—','(47) 99933-4455','Vago',0,0,0,false),unit('demo-b201','B','201','Renata Costa','Renata Costa','(47) 99944-5566','Proprietário residente',0,28,23,false),unit('demo-b202','B','202','Luiz Ferreira','Pedro Alves','(47) 99955-6677','Inquilino',1350,37,31,false),unit('demo-c301','C','301','Fernanda Rocha','Fernanda Rocha','(47) 99966-7788','Proprietário residente',0,34,26,true)];
@@ -91,7 +91,7 @@ function shell(){
     return '<button data-nav="'+i[0]+'"'+(i[0]===view?' aria-current="page"':'')+'>'+i[1]+c+'</button>'}).join('');
   var body={dashboard:vDash,unidades:vUnits,financeiro:vFin,leituras:vLeit,taxas:vTaxas,portaria:vPortaria,comunicacao:vComm,minha:vMinha}[view]();
   return '<aside><div class="brand"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>'+esc(COND)+'</small></div></div>'+
-    '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
+    '<div class="roles"><label>Sessão</label>'+(DEMO?'<span class="pill warn">Demonstração · somente consulta</span><label for="demo-role">Visualizar como</label><select id="demo-role"><option value="sindico"'+(role==='sindico'?' selected':'')+'>Síndico</option><option value="morador"'+(role==='morador'?' selected':'')+'>Morador</option></select>':'')+'<button class="btn ghost sm" data-signout>Sair de '+esc(USER&&USER.email||'')+'</button></div>'+
     '<div class="roles"><label for="mes">Mês de referência</label><select id="mes">'+MESES.map(function(m){return '<option value="'+m+'"'+(m===MES?' selected':'')+'>'+mesLabel(m)+'</option>'}).join('')+'</select></div><nav>'+navHtml+'</nav></aside><main>'+body+'</main>'+(toastMsg?'<div class="toast" role="status">'+esc(toastMsg)+'</div>':'');
 }
 function head(t,p){return '<div class="head"><div><h2>'+t+'</h2><p>'+p+'</p></div></div>'}
@@ -101,11 +101,11 @@ function setShell(on){var app=document.getElementById('app');if(app)app.classNam
 function renderAuth(){
   var app=document.getElementById('app');
   setShell(false);
-  if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Acesse o sistema</h2><p class="note">Entre em uma demonstração agora ou configure o acesso do condomínio.</p><button class="btn" type="button" data-demo-access>Acessar demonstração sem criar conta</button><p class="note" style="margin-top:12px">Para login e cadastro com salvamento de dados, configure o Supabase neste ambiente.</p></div></main>';return}
+  if(!supabase){app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2>Acesse o sistema</h2><p class="note">Entre em uma demonstração agora ou configure o acesso do condomínio.</p><button class="btn" type="button" data-demo-access>Acessar demonstração do síndico</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-resident>Acessar módulo do morador</button><p class="note" style="margin-top:12px">Para login e cadastro com salvamento de dados, configure o Supabase neste ambiente. A demonstração usa exemplos e não salva alterações.</p></div></main>';return}
   var reg=authMode==='register';
   app.innerHTML='<main style="max-width:620px;margin:8vh auto;padding:0 16px;width:100%"><div class="panel"><div class="brand" style="margin-bottom:18px"><div class="brand-mark">C</div><div><h1>CondoGestor</h1><small>Gestão simples do seu condomínio</small></div></div><h2 style="margin-bottom:6px">'+(reg?'Cadastre seu condomínio':'Entrar no sistema')+'</h2><p class="note">'+(reg?'Crie o acesso do síndico e configure as cobranças padrão.':'Acesse com o e-mail e a senha do síndico.')+'</p>'+(authNotice?'<p class="pill warn" style="margin:10px 0">'+esc(authNotice)+'</p>':'')+
   '<form class="f" id="f-auth">'+(reg?'<label>Seu nome<input id="a-nome" required autocomplete="name"></label><label>Nome do condomínio<input id="a-cond" required></label><label>CNPJ (opcional)<input id="a-cnpj" inputmode="numeric"></label><label class="wide">Endereço (opcional)<input id="a-endereco" autocomplete="street-address"></label><label>Telefone do condomínio<input id="a-telefone" type="tel"></label><label>Condomínio mensal padrão (R$)<input id="a-taxa" type="number" min="0" step="0.01" value="0" required></label><label>Vencimento da cobrança (dia)<input id="a-venc" type="number" min="1" max="28" value="10" required></label><label>Água<select id="a-agua"><option value="rateio">Rateio da conta do condomínio</option><option value="individual">Medidor e cobrança individual</option></select></label><label>Tarifa água (R$/m³)<input id="a-agua-tarifa" type="number" min="0" step="0.0001" value="0"></label><label>Tarifa gás (R$/m³)<input id="a-gas" type="number" min="0" step="0.0001" value="0"></label>':'')+
-  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-access>Acessar demonstração sem criar conta</button><p class="note" style="text-align:center;margin-top:8px">Demonstração com dados de exemplo; alterações não serão salvas.</p></div></main>';
+  '<label>E-mail<input id="a-email" type="email" required autocomplete="email"></label><label>Senha<input id="a-password" type="password" required minlength="8" autocomplete="'+(reg?'new-password':'current-password')+'"></label><button class="btn" type="submit">'+(reg?'Criar conta e condomínio':'Entrar')+'</button></form><button class="btn ghost" type="button" data-auth-mode>'+(reg?'Já tenho uma conta':'Criar uma conta de síndico')+'</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-access>Demonstração do síndico</button><button class="btn ghost" style="width:100%;margin-top:8px" type="button" data-demo-resident>Acessar módulo do morador</button><p class="note" style="text-align:center;margin-top:8px">Demonstração com dados de exemplo; alterações não serão salvas.</p></div></main>';
 }
 function renderLoading(message){setShell(false);document.getElementById('app').innerHTML='<main class="panel" style="max-width:620px;margin:12vh auto;width:100%"><h2>CondoGestor</h2><p>'+esc(message)+'</p></main>'}
 function dbRows(table){return supabase.from(table).select('*').then(function(r){if(r.error)throw r.error;return r.data||[]})}
@@ -493,8 +493,8 @@ function vMinha(){
 }
 
 function render(){
-  if(!supabase){renderAuth();return}
-  if(!DB_READY){renderAuth();return}
+  if(!supabase&&!DEMO){renderAuth();return}
+  if(!DB_READY&&!DEMO){renderAuth();return}
   document.body.classList.toggle('unit-modal-open',!!activeUnitId);
   var a=document.activeElement, id=a&&a.id;
   setShell(true);
@@ -508,6 +508,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&activeUnitI
 document.addEventListener('change',function(e){
   if(e.target.id==='mes'){setMes(e.target.value);render()}
   if(e.target.id==='my-unit'){MY=e.target.value;render()}
+  if(e.target.id==='demo-role'&&DEMO){role=e.target.value==='morador'?'morador':'sindico';view=role==='morador'?'minha':'dashboard';MY='A-101';USER={email:role==='morador'?'morador · unidade A-101':'síndico'};render()}
   if(e.target.id==='c-alu-fin'){S.config.cobrarAluguel=e.target.value==='sim';save();render()}
   if(e.target.id==='p-tipo'){var tp=e.target.value;document.querySelectorAll('#f-meio [data-tipos]').forEach(function(el){el.hidden=el.dataset.tipos.split(' ').indexOf(tp)<0})}
 });
@@ -516,7 +517,8 @@ document.addEventListener('click',async function(e){
   var financeTabButton=e.target.closest('[data-ftab]');if(financeTabButton){financeTab=financeTabButton.dataset.ftab;render();return}
   var unitTabButton=e.target.closest('[data-unit-tab]');if(unitTabButton){unitTab=unitTabButton.dataset.unitTab;render();return}
   var blockTabButton=e.target.closest('[data-block-tab]');if(blockTabButton){activeBlock=blockTabButton.dataset.blockTab;render();return}
-  if(e.target.closest('[data-demo-access]')){loadDemo();return}
+  if(e.target.closest('[data-demo-access]')){loadDemo('sindico');return}
+  if(e.target.closest('[data-demo-resident]')){loadDemo('morador');return}
   if(DEMO){var demoNav=e.target.closest('[data-nav]');if(demoNav){view=demoNav.dataset.nav;render();return}var demoOpen=e.target.closest('[data-open-unit]');if(demoOpen){openUnitModal(demoOpen.dataset.openUnit);return}if(e.target.closest('[data-close-unit]')){closeUnitModal();return}if(e.target.closest('[data-edit-tenant]')){editingTenant=true;render();var first=document.getElementById('n-nomes');if(first)first.focus();return}if(e.target.closest('[data-cancel-edit]')){editingTenant=false;render();return}if(e.target.closest('[data-signout]')){DEMO=false;DB_READY=false;USER=null;CONDO_ID='';COND='';S=seed();renderAuth();return}if(e.target.closest('button'))flash('A demonstração é somente para consulta. As alterações não serão salvas.');return}
   var openUnit=e.target.closest('[data-open-unit]');if(openUnit){openUnitModal(openUnit.dataset.openUnit);return}
   if(e.target.closest('[data-close-unit]')){closeUnitModal();return}

@@ -114,7 +114,7 @@ Deno.serve(async (request) => {
         const check = await fetch('https://api.mercadopago.com/users/me', { headers: { Authorization: 'Bearer ' + accessToken } });
         if (!check.ok) return reply(400, { error: 'O Mercado Pago recusou esse Access Token. Confira se copiou o token de produção ou teste correto.' });
       }
-      const accessTokenCipher = accessToken ? await encrypt(accessToken) : prior.access_token_cifrado;
+      const accessTokenCipher = accessToken ? await encrypt(accessToken) : prior!.access_token_cifrado;
       const { error: saveCredentialsError } = await admin.from('mercadopago_credenciais').upsert({
         condominio_id: condoId,
         access_token_cifrado: accessTokenCipher,
@@ -135,10 +135,10 @@ Deno.serve(async (request) => {
     const { data: current, error: currentError } = await admin.from('meios_pagamento_condominio').select('id').eq('condominio_id', condoId).eq('ativo', true).maybeSingle();
     if (currentError) throw new Error('Não foi possível atualizar o meio ativo.');
     if (current?.id) {
-      const { error } = await admin.from('meios_pagamento_condominio').update({ nome: methodName, tipo: methodType, dados_publicos: publicData, instrucoes, ativo: true, updated_at: new Date().toISOString() }).eq('id', current.id).eq('condominio_id', condoId);
+      const { error } = await admin.from('meios_pagamento_condominio').update({ nome: methodName, tipo: methodType, dados_publicos: publicData, instrucoes: instructions, ativo: true, updated_at: new Date().toISOString() }).eq('id', current.id).eq('condominio_id', condoId);
       if (error) throw new Error('Não foi possível salvar o meio de pagamento ativo.');
     } else {
-      const { error } = await admin.from('meios_pagamento_condominio').insert({ condominio_id: condoId, nome: methodName, tipo: methodType, dados_publicos: publicData, instrucoes, ativo: true, criado_por: userData.user.id });
+      const { error } = await admin.from('meios_pagamento_condominio').insert({ condominio_id: condoId, nome: methodName, tipo: methodType, dados_publicos: publicData, instrucoes: instructions, ativo: true, criado_por: userData.user.id });
       if (error) throw new Error('Não foi possível cadastrar o meio de pagamento ativo.');
     }
     return reply(200, { ok: true });

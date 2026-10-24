@@ -90,7 +90,7 @@ var totalDespesas=function(){return despMes().reduce(function(a,d){return a+d.va
 function cobrancaTexto(f){var c=cobranca(f);return 'Olá, '+(f.dono||f.morador)+'. Cobrança de '+MES_LABEL+' da unidade '+uLabel(f)+': taxa '+brl(c.taxa)+', água '+brl(c.agua)+', gás '+brl(c.gas)+c.extras.map(function(e){return ', '+e.nome.toLowerCase()+' '+brl(e.valor)}).join('')+(S.config.cobrarAluguel&&c.aluguel?', aluguel '+brl(c.aluguel):'')+'. Total '+brl(c.total)+', com vencimento em '+fmtD(dueDate(MES))+'. Pedimos a regularização. Administração do '+COND+'.'}
 function waCobranca(u){var d=String(u.tel||'').replace(/\D/g,'');if(d.length<10)return '';if(d.length<=11)d='55'+d;return 'https://wa.me/'+d+'?text='+encodeURIComponent(cobrancaTexto(u))}
 function unitOptions(){return S.unidades.map(function(u){return '<option>'+esc(uLabel(u))+'</option>'}).join('')}
-function flash(m){var d=document.createElement('div');d.className='toast';d.setAttribute('role','status');d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},2600)}
+function flash(m){var isError=/não foi possível|nao foi possivel|erro|negad|permission|não confirmou/i.test(String(m||''));var d=document.createElement('div');d.className='toast';d.setAttribute('role',isError?'alert':'status');d.textContent=m;if(isError){d.style.cursor='pointer';d.title='Clique para fechar';d.addEventListener('click',function(){d.remove()})}document.body.appendChild(d);setTimeout(function(){d.remove()},isError?12000:2600)}
 function toast(m){toastMsg=m;render();setTimeout(function(){toastMsg='';var t=document.querySelector('#app .toast');if(t)t.remove()},2200)}
 
 function applyTheme(){document.documentElement.setAttribute('data-theme',THEME==='dark'?'dark':'light')}

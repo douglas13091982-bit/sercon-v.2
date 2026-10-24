@@ -35,7 +35,9 @@ Deno.serve(async (request) => {
     const body = await request.json();
     if (body.action !== 'invite') return reply(400, { error: 'Ação não reconhecida.' });
     const residentId = String(body.moradorId || '');
+    const requestedEmail = String(body.email || '').trim().toLowerCase();
     if (!residentId) return reply(400, { error: 'Morador não informado.' });
+    if (requestedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedEmail)) return reply(400, { error: 'Informe um e-mail válido para este morador.' });
     const { data: resident, error: residentError } = await admin
       .from('moradores')
       .select('id,nome,email,user_id,unidade_id,tipo,condominio_id')
@@ -45,7 +47,18 @@ Deno.serve(async (request) => {
     if (residentError) throw new Error('Não foi possível carregar o morador.');
     if (!resident || resident.tipo !== 'inquilino' || !resident.unidade_id) return reply(404, { error: 'Inquilino não encontrado nesta unidade.' });
     if (resident.user_id) return reply(409, { error: 'Este morador já possui acesso ao aplicativo.' });
-    const email = String(resident.email || '').trim().toLowerCase();
+    let email = String(resident.email || '').trim().toLowerCase();
+    if (requestedEmail && requestedEmail !== email) {
+      const { data: savedResident, error: saveEmailError } = await admin.from('moradores')
+        .update({ email: requestedEmail })
+        .eq('id', resident.id)
+        .eq('condominio_id', profile.condominio_id)
+        .select('id,email')
+        .maybeSingle();
+      if (saveEmailError) throw new Error('Não foi possível salvar o e-mail de acesso: ' + saveEmailError.message);
+      if (!savedResident) throw new Error('O e-mail não foi salvo no cadastro do morador. Atualize a tela e tente novamente.');
+      email = String(savedResident.email || '').trim().toLowerCase();
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply(400, { error: 'Cadastre um e-mail válido para este morador antes de enviar o acesso.' });
 
     const { data: token, error: inviteError } = await caller.rpc('criar_convite', {
@@ -63,14 +76,14 @@ Deno.serve(async (request) => {
     if (authInviteError || !invited.user) {
       const alreadyRegistered = /already|registered|exists|cadastrad/i.test(authInviteError?.message || '');
       if (alreadyRegistered) {
-        return reply(200, { ok: true, inviteSent: false, requiresExistingLogin: true, token });
+        return reply(200, { ok: true, email, inviteSent: false, requiresExistingLogin: true, token });
       }
       await admin.from('convites_acesso').update({ revogado_em: new Date().toISOString() })
         .eq('condominio_id', profile.condominio_id).eq('email', email).is('aceito_em', null).is('revogado_em', null);
       return reply(400, { error: authInviteError?.message || 'Não foi possível enviar o e-mail de convite.' });
     }
 
-    return reply(200, { ok: true, inviteSent: true });
+    return reply(200, { ok: true, email, inviteSent: true });
   } catch (error) {
     return reply(500, { error: error instanceof Error ? error.message : 'Erro inesperado.' });
   }

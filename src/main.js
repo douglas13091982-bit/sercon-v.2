@@ -406,6 +406,7 @@ var tenantEditor=function(u){
       var name=names[index]||('Morador '+(index+1)),email=emails[index]||'',phone=(u.residentPhones||[])[index]||'',active=!!users[index];
       if(active)delete RESIDENT_INVITES[id];
       return '<article class="resident-access-row"><div class="resident-access-person"><b>'+esc(name)+'</b><span class="pill '+(active?'ok':'mute')+'">'+(active?'Acesso ativo':'Sem acesso')+'</span></div>'+(active?'<p class="note">Login: '+esc(email||'e-mail cadastrado')+'.</p>':'<form class="f resident-access-form" data-resident-access-form data-unit-id="'+esc(u.id)+'" data-resident-id="'+esc(id)+'"><label class="wide">E-mail de acesso<input type="email" name="email" value="'+esc(email)+'" required placeholder="morador@email.com" autocomplete="email"></label><p class="note wide">Senha inicial: telefone cadastrado deste morador, somente números'+(phone?' ('+esc(phone.replace(/\D/g,''))+')':'')+'. Nenhum e-mail de convite será enviado.</p><button class="btn sm" type="submit">Cadastrar acesso</button></form>')+'</article>';
+    }).join('');
 
     access='<section class="resident-access panel"><div><h4>Acesso ao aplicativo</h4><p class="note">Cadastre o e-mail de cada morador. Ele entrará com esse e-mail e a senha inicial será o telefone cadastrado, usando somente números. O sistema não enviará convite.</p></div>'+(accessRows||'<p class="empty">Não há moradores cadastrados nesta locação.</p>')+'</section>';
   }
